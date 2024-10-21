@@ -46,11 +46,6 @@ const Args = struct {
         }
         return args;
     }
-
-    fn assert_valid(args: *const Args) !void {
-        assert(args.source_path != null);
-        assert(args.destination_path != null);
-    }
 };
 
 const a = error.Failure{
