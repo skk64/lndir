@@ -17,3 +17,10 @@ Files can be safely reorganised and renamed without risk of accidental deletion.
 
 A directory of movies can be structured for multiple separate apps (e.g. Jellyfin and Plex) without using extra storage space.
 
+## Compilation
+
+Requires zig >= 0.14
+
+```
+zig build -Doptimize=ReleaseSmall
+```
