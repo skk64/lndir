@@ -76,6 +76,9 @@ fn ln_all_files_in_dir(dir: Dir, source_path: [*:0]const u8, destination_path: [
         std.debug.print("Error opening {s}\n", .{source_path});
         return err;
     };
+    var source_path_buf: [std.posix.PATH_MAX]u8 = undefined;
+    var file_buf: [std.posix.PATH_MAX]u8 = undefined;
+    const source_path_absolute = try source.realpath(".", &source_path_buf);
 
     // Create destination directory if it doesn't already exist
     dir.makeDirZ(destination_path) catch |err| switch (err) {
@@ -100,7 +103,7 @@ fn ln_all_files_in_dir(dir: Dir, source_path: [*:0]const u8, destination_path: [
 
     var file_count: u64 = 0;
 
-    // Ansi control codes
+    // Ansi control codes for progress tracking on same line
     const csi: *const [2:0]u8 = &.{ std.ascii.control_code.esc, '[' };
     const move_cursor_prev_line = csi ++ "F";
     const erase_line = csi ++ "K";
@@ -119,6 +122,16 @@ fn ln_all_files_in_dir(dir: Dir, source_path: [*:0]const u8, destination_path: [
         break :blk null;
     }) |p| {
         try bw.flush();
+
+        // skip anything that would cause a recursive loop. (that would cause a file to be linked more than once)
+        var file_path_absolute = try destination.realpath(".", &file_buf);
+        file_buf[file_path_absolute.len] = '/';
+        @memcpy(file_buf[file_path_absolute.len + 1 .. file_path_absolute.len + 1 + p.path.len], p.path);
+        file_path_absolute.len += p.path.len + 1;
+        if (std.mem.startsWith(u8, file_path_absolute, source_path_absolute)) {
+            try stderr.print(overwrite_prev_line ++ "Cannot create link inside source directory. Skipping {s}\n\n", .{p.path});
+            continue;
+        }
         switch (p.kind) {
             .file, .sym_link => {
                 const source_file = try std.fs.path.joinZ(allocator, &.{ source_path_span, p.path });
