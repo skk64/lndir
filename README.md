@@ -13,6 +13,10 @@ By using hardlinks, no additional space is used, and file duplication is near-in
 
 Files can be safely reorganised and renamed without risk of accidental deletion.
 
+### Dotfile management
+
+This acts as a more general version of GNU stow. Create a directory with dotfiles in it, as they would be in your home directory, then run lndir to link them to their correct locations.
+
 ### Application specific uses
 
 A directory of movies can be structured for multiple separate apps (e.g. Jellyfin and Plex) without using extra storage space.
