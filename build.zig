@@ -5,9 +5,15 @@ const std = @import("std");
 // runner.
 pub fn build(b: *std.Build) void {
     // options
-    const staticBinary = b.option(bool, "static", "compile with musl to make a static executable (Linux only)") orelse false;
+    const staticBinary = b.option(bool, "static", "compile with musl to make a static executable") orelse false;
     const no_llvm = b.option(bool, "no-llvm", "Don't use LLVM backend for compilation") orelse false;
-    const target = b.standardTargetOptions(.{ .default_target = if (staticBinary) .{ .abi = .musl } else .{} });
+    // const target = b.standardTargetOptions(.{ .default_target = if (staticBinary) .{ .abi = .musl } else .{} });
+    const target = b.standardTargetOptions(.{});
+    var c_target = target;
+    if (staticBinary) {
+        c_target.result.abi = .musl;
+        c_target.query.abi = .musl;
+    }
     const optimize = b.standardOptimizeOption(.{});
 
     // zig exe
@@ -28,7 +34,7 @@ pub fn build(b: *std.Build) void {
     // c exe
     const c_exe = b.addExecutable(.{
         .name = "lndir_c",
-        .target = target,
+        .target = c_target,
         .optimize = optimize,
     });
     const WerrorIfDebug = if (optimize == .Debug) "-Werror" else "";
