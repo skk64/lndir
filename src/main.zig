@@ -1,7 +1,10 @@
 const std = @import("std");
 const Dir = std.fs.Dir;
+const cwd = std.fs.cwd;
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
+// const IoUring = std.os.linux.IoUring
+const linux = std.os.linux;
 
 pub fn help(bin_name: [*:0]const u8) !void {
     const help_message: []const u8 =
@@ -48,10 +51,6 @@ const Args = struct {
     }
 };
 
-const a = error.Failure{
-    .F,
-};
-
 pub fn main() !void {
     const argv = std.os.argv;
     const args = Args.parse(argv);
@@ -61,7 +60,7 @@ pub fn main() !void {
         std.process.exit(1);
     }
 
-    ln_all_files_in_dir(std.fs.cwd(), args.source_path.?, args.destination_path.?) catch |err| {
+    ln_all_files_in_dir(cwd(), args.source_path.?, args.destination_path.?) catch |err| {
         std.debug.print("{any}\n\n", .{err});
         try help(argv[0]);
         std.process.exit(1);
@@ -72,31 +71,22 @@ fn ln_all_files_in_dir(dir: Dir, source_path: [*:0]const u8, destination_path: [
     const destination_path_span: []const u8 = std.mem.span(destination_path);
     const source_path_span: []const u8 = std.mem.span(source_path);
 
-    const source = dir.openDirZ(source_path, .{ .iterate = true, .no_follow = true }) catch |err| {
-        std.debug.print("Error opening {s}\n", .{source_path});
+    const destination = dir.makeOpenPath(destination_path_span, .{ .iterate = true, .no_follow = true }) catch |err| {
         return err;
     };
-    var source_path_buf: [std.posix.PATH_MAX]u8 = undefined;
-    var file_buf: [std.posix.PATH_MAX]u8 = undefined;
-    const source_path_absolute = try source.realpath(".", &source_path_buf);
+    const source = dir.openDir(source_path_span, .{ .iterate = true, .no_follow = true }) catch |err| {
+        return err;
+    };
 
-    // Create destination directory if it doesn't already exist
-    dir.makeDirZ(destination_path) catch |err| switch (err) {
-        error.PathAlreadyExists => {},
-        else => {
-            std.debug.print("Could not create destination '{s}'\nExiting\n", .{destination_path});
-            return err;
-        },
-    };
-    const destination = dir.openDirZ(destination_path, .{ .iterate = true, .no_follow = true }) catch |err| {
-        std.debug.print("Error opening {s}\n", .{destination_path});
-        return err;
-    };
+    var file_buf: [std.posix.PATH_MAX]u8 = undefined;
+    var source_path_buf: [std.posix.PATH_MAX]u8 = undefined;
+    const source_path_absolute = try source.realpath(".", &source_path_buf);
 
     // Need memory for walker and file path buffers
     // Walker uses bounded amount of memory, defined by maximum path lengths
     // so FixedBufferAllocator is suitable
-    // Maximum memory requirement determined by getdents64() syscall (max of u16) plus 2 paths (and some extra for allocator)
+    // Maximum memory requirement determined by getdents64() syscall (max of u16)
+    // plus 2 paths (and some extra for allocator overhead)
     var mem_buffer: [std.posix.PATH_MAX * 2 + std.math.maxInt(u16) + 0x1000]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&mem_buffer);
     const allocator = fba.allocator();
