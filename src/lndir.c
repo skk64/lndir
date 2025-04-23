@@ -31,6 +31,14 @@ void print_help(const char *prog_name) {
 /// Return 0 on success, or -1 on failure, with errno set
 int link_all_files_in_dir(const char *src_dir, const char *dest_dir) {
     // Ensure the source directory exists
+
+    // don't create endless recursive directory tree
+    const size_t src_len = strlen(src_dir);
+    if (strncmp(dest_dir, src_dir, src_len) == 0) {
+        fprintf(stderr, "\tCannot create link inside source directory, skipping: %s\n", src_dir);
+        return -1;
+    }
+
     struct stat src_dir_st;
     if (stat(src_dir, &src_dir_st) == -1 || !S_ISDIR(src_dir_st.st_mode)) {
         fprintf(stderr, "%d: %s\n\tError opening source directory: %s\n", errno,
