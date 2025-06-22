@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Dir = std.fs.Dir;
 const cwd = std.fs.cwd;
 const Allocator = std.mem.Allocator;
@@ -87,8 +88,19 @@ fn ln_all_files_in_dir(dir: Dir, source_path: [*:0]const u8, destination_path: [
     // so FixedBufferAllocator is suitable
     // Maximum memory requirement determined by getdents64() syscall (max of u16)
     // plus 2 paths (and some extra for allocator overhead)
-    var mem_buffer: [std.posix.PATH_MAX * 2 + std.math.maxInt(u16) + 0x1000]u8 = undefined;
-    var fba = std.heap.FixedBufferAllocator.init(&mem_buffer);
+    const mem_size = std.posix.PATH_MAX * 2 + std.math.maxInt(u16) + 0x1000;
+    const array_size = switch (builtin.link_libc) {
+        true => 0,
+        false => mem_size,
+    };
+    var array_buf: [array_size]u8 = undefined;
+    const mem_buffer: []u8 = switch (builtin.link_libc) {
+        true => try std.heap.c_allocator.alloc(u8, mem_size),
+        false => &array_buf,
+    };
+    defer if (builtin.link_libc) std.heap.c_allocator.free(mem_buffer);
+
+    var fba = std.heap.FixedBufferAllocator.init(mem_buffer);
     const allocator = fba.allocator();
 
     var file_count: u64 = 0;
@@ -105,7 +117,7 @@ fn ln_all_files_in_dir(dir: Dir, source_path: [*:0]const u8, destination_path: [
     // newline to compensate for first cursor_prev_line code
     try stderr.print("\n", .{});
 
-    var walker = try source.walk(allocator);
+    var walker = source.walk(allocator) catch unreachable;
     defer walker.deinit();
     while (walker.next() catch |e| blk: {
         std.debug.print("Error accessing files: {any}\n\n", .{e});
@@ -124,8 +136,10 @@ fn ln_all_files_in_dir(dir: Dir, source_path: [*:0]const u8, destination_path: [
         }
         switch (p.kind) {
             .file, .sym_link => {
-                const source_file = try std.fs.path.joinZ(allocator, &.{ source_path_span, p.path });
-                const destination_file = try std.fs.path.joinZ(allocator, &.{ destination_path_span, p.path });
+                // Infallible as memory is allocated already
+                const source_file = std.fs.path.joinZ(allocator, &.{ source_path_span, p.path }) catch unreachable;
+                const destination_file = std.fs.path.joinZ(allocator, &.{ destination_path_span, p.path }) catch unreachable;
+
                 if (std.posix.link(source_file, destination_file)) {
                     file_count += 1;
                     try stderr.print(overwrite_prev_line ++ "Linking  {d} files\n", .{file_count});
