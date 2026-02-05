@@ -15,27 +15,37 @@ struct StringList {
     struct StringList *next;
     char *data;
     int len;
+    int cap;
 };
 typedef struct StringList StringList;
 
 
 
-#define STRINGLIST_BLOCK_SIZE 4096
+#define STRINGLIST_START_BLOCK_SIZE 128
 #define MAX_SQE 128
 // Must be smaller than MAX_SQE
 #define SQE_SUBMISSION_SIZE 16
 
-StringList *StringList_new() {
-    // printf("new list called\n");
+#define max(a, b) a < b ? b : a;
+#define min(a, b) a < b ? a : b;
+
+
+StringList *StringList_new_blocksize(int blocksize) {
+    printf("new list called\n");
     StringList *list = calloc(1, sizeof(StringList));
     if (list == NULL) return NULL;
-    list->data = calloc(STRINGLIST_BLOCK_SIZE, sizeof(char));
+    list->data = calloc(blocksize, sizeof(char));
     if (list->data == NULL) {
         free(list);
         return NULL;
     }
+    list->cap = blocksize;
     return list;
-} 
+}
+
+StringList *StringList_new() {
+    return StringList_new_blocksize(STRINGLIST_START_BLOCK_SIZE);
+}
 
 /// Add a string to a string list.
 /// Returns a pointer to the latest block
@@ -43,10 +53,11 @@ StringList *StringList_new() {
 /// should be kept and used for iteration
 StringList *StringList_add(StringList *list, char *string, int string_len) {
     if (list == NULL) return NULL;
-    if (string_len > STRINGLIST_BLOCK_SIZE) return NULL;
 
-    if (string_len + list->len >= STRINGLIST_BLOCK_SIZE) {
-        StringList *new_list = StringList_new();
+    // Need + 2 so the iterator works as expected
+    if (string_len + list->len + 2 >= list->cap) {
+        int new_blocksize = max(list->cap * 2, string_len * 2);
+        StringList *new_list = StringList_new_blocksize(new_blocksize);
         list->next = new_list;
         list = new_list;
     }
@@ -63,48 +74,44 @@ StringList *StringList_add_nullterm(StringList *list, char *string) {
 
 
 struct StringListIter {
-    struct StringList list;
+    struct StringList* list;
+    int len;
 };
 typedef struct StringListIter StringListIter;
 
 StringListIter StringListIter_new(StringList* list) {
     StringListIter iter;
-    iter.list = *list;
-    iter.list.len = 0;
+    iter.list = list;
+    iter.len = 0;
     return iter;
 }
 
 
-/// Returns the next string in a string list block. Returns NULL if it is at the end of the block
-char* StringList_next_string(StringList *list) {
-    char *start = list->data + list->len;
-    if (*start == 0) {
-        return NULL;
-    } else {
-        int len = strlen(start);
-        list->len += len + 1;
-        return start;
-    }
-}
-
 char* StringListIter_next(StringListIter* iter) {
-    char* str = StringList_next_string(&iter->list);
-    int i = 0;
-    while (str == NULL) {
-        assert(i++ < 3 && "StringListIterNext looping"); // Almost certainly something wrong if this triggers
-        // Push to next block
-        if (iter->list.next == NULL) {
-            return NULL;
-        } else {
-            StringList* next = iter->list.next;
-            iter->list.len = 0;
-            iter->list.data = next->data;
-            iter->list.next = next->next;
-            str = StringList_next_string(&iter->list);
-        }
+    StringList* list = iter->list;
+    char *str = list->data + iter->len;
+    if (*str == 0) {
+        // Try getting next block
+        printf("iter: end of block\n");
+        if (list->next == NULL) return NULL;
+        iter->list = list->next;
+        iter->len = 0;
+        str = list->data + iter->len;
+        assert(str != NULL);
     }
+    int len = strlen(str);
+    iter->len += len + 1;
     return str;
 }
+
+/// Iterates over the list, and frees blocks as it goes
+char* StringListIter_next_free(StringListIter* iter) {
+    char* data = iter->list->data;
+    char* str = StringListIter_next(iter);
+    if ((iter->list->data != data || str == NULL) && data != NULL) free(data);
+    return str;
+}
+
 
 
 /// Returns the number of results handled
