@@ -148,12 +148,11 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
     int src_fd = open(src_dir, O_DIRECTORY);
     int dest_fd = open(dest_dir, O_DIRECTORY);
 
-
     int submission_count = 0;
     int handled_count = 0;
-    char* file = StringListIter_next(file_list);
 
-    while (file != NULL) {
+    char* file;
+    while ((file = StringListIter_next(file_list)) != NULL) {
         printf("link file: %s\n", file);
         struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
         // get_sqe returns NULL when the queue is full
@@ -169,9 +168,10 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
         if (submission_count % SQE_SUBMISSION_SIZE == 0) {
             io_uring_submit(&ring);
         }
-        file = StringListIter_next(file_list);
     }
+
     io_uring_submit(&ring);
+
     while (handled_count < submission_count) {
         printf("handled/submitted:   %d/%d\n", handled_count, submission_count);
         // block until ready
