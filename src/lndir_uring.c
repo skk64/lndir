@@ -2,7 +2,6 @@
 #define _GNU_SOURCE
 
 #include <dirent.h>
-// #include <errno.h>
 #include <assert.h>
 #include <linux/limits.h>
 #include <stdint.h>
@@ -15,108 +14,12 @@
 #include <liburing.h>
 #include <ftw.h>
 
-struct StringList {
-    struct StringList *next;
-    char *data;
-    int len;
-    int cap;
-};
-typedef struct StringList StringList;
+#include "string_list.c"
 
 
-
-#define STRINGLIST_START_BLOCK_SIZE 128
 #define MAX_SQE 128
 // Must be smaller than MAX_SQE
 #define SQE_SUBMISSION_SIZE 16
-
-#define max(a, b) a < b ? b : a;
-#define min(a, b) a < b ? a : b;
-
-
-
-StringList *StringList_new_blocksize(int blocksize) {
-    printf("new list called: %d\n", blocksize);
-    StringList *list = calloc(1, sizeof(StringList));
-    if (list == NULL) return NULL;
-    list->data = calloc(blocksize, sizeof(char));
-    if (list->data == NULL) {
-        free(list);
-        return NULL;
-    }
-    list->cap = blocksize;
-    return list;
-}
-
-
-StringList *StringList_new() {
-    return StringList_new_blocksize(STRINGLIST_START_BLOCK_SIZE);
-}
-
-/// Add a string to a string list.
-/// Returns a pointer to the latest block
-/// Implemented as a singly-linked list of blocks, so the first StringList
-/// should be kept and used for iteration
-StringList *StringList_add(StringList *list, const char *string, int string_len) {
-    if (list == NULL) return NULL;
-
-    // Need + 2 so the iterator works as expected
-    if (string_len + list->len + 2 >= list->cap) {
-        int new_blocksize = max(list->cap * 2, string_len * 2);
-        StringList *new_list = StringList_new_blocksize(new_blocksize);
-        list->next = new_list;
-        list = new_list;
-    }
-    memcpy(list->data + list->len, string, string_len);
-    list->len += string_len + 1;
-    return list;
-}
-
-StringList *StringList_add_nullterm(StringList *list, const char *string) {
-    int len = strlen(string);
-    return StringList_add(list, string, len);
-}
-
-
-
-struct StringListIter {
-    struct StringList* list;
-    int len;
-};
-typedef struct StringListIter StringListIter;
-
-StringListIter StringListIter_new(StringList* list) {
-    StringListIter iter;
-    iter.list = list;
-    iter.len = 0;
-    return iter;
-}
-
-
-char* StringListIter_next(StringListIter* iter) {
-    StringList* list = iter->list;
-    char *str = list->data + iter->len;
-    if (*str == 0) {
-        // Try getting next block
-        printf("iter: end of block\n");
-        if (list->next == NULL) return NULL;
-        iter->list = list->next;
-        iter->len = 0;
-        str = list->data + iter->len;
-        assert(str != NULL);
-    }
-    int len = strlen(str);
-    iter->len += len + 1;
-    return str;
-}
-
-/// Iterates over the list, and frees blocks as it goes
-char* StringListIter_next_free(StringListIter* iter) {
-    char* data = iter->list->data;
-    char* str = StringListIter_next(iter);
-    if ((iter->list->data != data || str == NULL) && data != NULL) free(data);
-    return str;
-}
 
 
 
@@ -199,15 +102,14 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
 
 
 
-struct StringList* file_list;
-struct StringList* file_list_start;
+struct StringList file_list;
 
 int directory_entry_handler(const char* fpath, const struct stat* sb, int typeflag, struct FTW* ftwbuf) {
     switch (sb->st_mode & S_IFMT) {    
     case S_IFREG:
     case S_IFLNK:
         // printf("file: %s\n", fpath);
-        file_list = StringList_add_nullterm(file_list, fpath);
+        StringList_add_nullterm(&file_list, fpath);
         break;
     case S_IFDIR:
         printf("dir: %s\n", fpath);
@@ -242,10 +144,7 @@ void print_help(const char *prog_name) {
 
 #ifndef TEST_RUNNER
 int main(int argc, char *argv[]) {
-    StringList* list = StringList_new();
-    StringList* first_list = list;
-    file_list = list;
-    file_list_start = list;
+    file_list = StringList_new();
 
     if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
         print_help(argv[0]);
@@ -263,13 +162,16 @@ int main(int argc, char *argv[]) {
 
     nftw(input, &directory_entry_handler, 128, 0);
 
-    StringListIter iter = StringListIter_new(first_list);
+    StringListIter iter = StringListIter_new(&file_list);
     hardlink_file_list_iouring(&iter, input, output);
 
+    // iter = StringListIter_new(&file_list);
     // char* filename;
     // printf("\n\n");
     // while ( (filename = StringListIter_next(&iter)) != NULL) {
     //     printf("file: %s\n", filename);
     // }
+
+    StringList_free(file_list);
 }
 #endif
