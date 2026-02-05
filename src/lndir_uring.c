@@ -1,15 +1,19 @@
+#define _XOPEN_SOURCE 500 
+#define _GNU_SOURCE
+
 #include <dirent.h>
 // #include <errno.h>
 #include <assert.h>
-#include <fcntl.h>
-#include <liburing.h>
 #include <linux/limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <liburing.h>
+#include <ftw.h>
 
 struct StringList {
     struct StringList *next;
@@ -30,8 +34,9 @@ typedef struct StringList StringList;
 #define min(a, b) a < b ? a : b;
 
 
+
 StringList *StringList_new_blocksize(int blocksize) {
-    printf("new list called\n");
+    printf("new list called: %d\n", blocksize);
     StringList *list = calloc(1, sizeof(StringList));
     if (list == NULL) return NULL;
     list->data = calloc(blocksize, sizeof(char));
@@ -43,6 +48,7 @@ StringList *StringList_new_blocksize(int blocksize) {
     return list;
 }
 
+
 StringList *StringList_new() {
     return StringList_new_blocksize(STRINGLIST_START_BLOCK_SIZE);
 }
@@ -51,7 +57,7 @@ StringList *StringList_new() {
 /// Returns a pointer to the latest block
 /// Implemented as a singly-linked list of blocks, so the first StringList
 /// should be kept and used for iteration
-StringList *StringList_add(StringList *list, char *string, int string_len) {
+StringList *StringList_add(StringList *list, const char *string, int string_len) {
     if (list == NULL) return NULL;
 
     // Need + 2 so the iterator works as expected
@@ -66,9 +72,9 @@ StringList *StringList_add(StringList *list, char *string, int string_len) {
     return list;
 }
 
-StringList *StringList_add_nullterm(StringList *list, char *string) {
+StringList *StringList_add_nullterm(StringList *list, const char *string) {
     int len = strlen(string);
-    StringList_add(list, string, len);
+    return StringList_add(list, string, len);
 }
 
 
@@ -137,13 +143,15 @@ int iouring_handle_results(struct io_uring *ring) {
 }
 
 int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, const char *dest_dir) {
-    if (src_dir == NULL || dest_dir == NULL)
-        return 1;
+    if (src_dir == NULL || dest_dir == NULL) return 1;
+    int src_dir_len = strlen(src_dir);
+    // int dest_dir_len = strlen(dest_dir);
 
     struct io_uring ring;
     int result = io_uring_queue_init(MAX_SQE, &ring, 0);
     if (result != 0)
         return result;
+
 
     int src_fd = open(src_dir, O_DIRECTORY);
     int dest_fd = open(dest_dir, O_DIRECTORY);
@@ -154,6 +162,9 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
     char* file;
     while ((file = StringListIter_next(file_list)) != NULL) {
         printf("link file: %s\n", file);
+        char* file_relative = file + src_dir_len;
+        while (file_relative[0] == '/') file_relative += 1;
+
         struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
         // get_sqe returns NULL when the queue is full
         while (sqe == NULL) {
@@ -161,7 +172,7 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
             handled_count += results_handled;
             sqe = io_uring_get_sqe(&ring);
         }
-        io_uring_prep_linkat(sqe, src_fd, file, dest_fd, file, 0);
+        io_uring_prep_linkat(sqe, src_fd, file_relative, dest_fd, file_relative, 0);
         io_uring_sqe_set_data(sqe, file);
         submission_count += 1;
 
@@ -185,14 +196,80 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
     return 0;
 }
 
+
+
+
+struct StringList* file_list;
+struct StringList* file_list_start;
+
+int directory_entry_handler(const char* fpath, const struct stat* sb, int typeflag, struct FTW* ftwbuf) {
+    switch (sb->st_mode & S_IFMT) {    
+    case S_IFREG:
+    case S_IFLNK:
+        // printf("file: %s\n", fpath);
+        file_list = StringList_add_nullterm(file_list, fpath);
+        break;
+    case S_IFDIR:
+        printf("dir: %s\n", fpath);
+        break;
+    }
+    return 0;
+}
+
+
 /// Uses io_uring to asynchronously link every file
 int hardlink_directory_iouring(const char *src_dir, const char *dest_dir) {
     return 0;
 }
 
+
+void print_help(const char *prog_name) {
+    const char *help_string =
+        "Usage: %s [OPTIONS] <source_directory> <target_directory>\n"
+        "Recursively create hard links for all files in <source_directory> "
+        "within <target_directory>.\n"
+        "Will create duplicate directories in <target_directory>.\n"
+        "\n"
+        "Options:\n"
+        "  -h, --help        Show this help message and exit\n"
+        "\n"
+        "Example:\n"
+        "  %s /path/to/source /path/to/target\n"
+        "  %s relative/source relative/target\n";
+    printf(help_string, prog_name, prog_name, prog_name);
+}
+
+
 #ifndef TEST_RUNNER
-int main() {
+int main(int argc, char *argv[]) {
     StringList* list = StringList_new();
     StringList* first_list = list;
+    file_list = list;
+    file_list_start = list;
+
+    if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
+        print_help(argv[0]);
+        exit(EXIT_SUCCESS);
+    }
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <source_directory> <target_directory>\n",
+                argv[0]);
+        fprintf(stderr, "Try '%s --help' for more information\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    char* input = argv[1];
+    char* output = argv[2];
+
+    nftw(input, &directory_entry_handler, 128, 0);
+
+    StringListIter iter = StringListIter_new(first_list);
+    hardlink_file_list_iouring(&iter, input, output);
+
+    // char* filename;
+    // printf("\n\n");
+    // while ( (filename = StringListIter_next(&iter)) != NULL) {
+    //     printf("file: %s\n", filename);
+    // }
 }
 #endif
