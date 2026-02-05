@@ -45,19 +45,13 @@ int iouring_handle_results(struct io_uring *ring) {
     return count;
 }
 
-int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, const char *dest_dir) {
-    if (src_dir == NULL || dest_dir == NULL) return 1;
-    int src_dir_len = strlen(src_dir);
-    // int dest_dir_len = strlen(dest_dir);
+int hardlink_file_list_iouring_fd(StringListIter *file_list, int src_dir_len, int src_dir_fd, int dest_dir_fd) {
+    if (src_dir_fd < 0 || dest_dir_fd < 0 || src_dir_len <= 0) return 1;
 
     struct io_uring ring;
     int result = io_uring_queue_init(MAX_SQE, &ring, 0);
     if (result != 0)
         return result;
-
-
-    int src_fd = open(src_dir, O_DIRECTORY);
-    int dest_fd = open(dest_dir, O_DIRECTORY);
 
     int submission_count = 0;
     int handled_count = 0;
@@ -75,7 +69,7 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
             handled_count += results_handled;
             sqe = io_uring_get_sqe(&ring);
         }
-        io_uring_prep_linkat(sqe, src_fd, file_relative, dest_fd, file_relative, 0);
+        io_uring_prep_linkat(sqe, src_dir_fd, file_relative, dest_dir_fd, file_relative, 0);
         io_uring_sqe_set_data(sqe, file);
         submission_count += 1;
 
@@ -96,23 +90,43 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
         handled_count += results_handled;
     }
     printf("handled/submitted:   %d/%d\n", handled_count, submission_count);
+    io_uring_queue_exit(&ring);
     return 0;
 }
 
+int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, const char *dest_dir) {
+    int src_fd = open(src_dir, O_DIRECTORY);
+    int dest_fd = open(dest_dir, O_DIRECTORY);
+    int src_dir_len = strlen(src_dir);
+    int result = hardlink_file_list_iouring_fd(file_list, src_dir_len, src_fd, dest_fd);
+    close(src_fd);
+    close(dest_fd);
+    return result;
+}
 
 
-
+/// These are needed for the nftw callback
+// char* source_directory;
+// char* destination_directory;
+int source_directory_len = -1;
+int destination_directory_fd = -1;
 struct StringList file_list;
 
-int directory_entry_handler(const char* fpath, const struct stat* sb, int typeflag, struct FTW* ftwbuf) {
+int copy_directories_add_filenames(const char* fpath, const struct stat* sb, int typeflag, struct FTW* ftwbuf) {
+    assert(source_directory_len > 0);
+    assert(destination_directory_fd > 0);
+    const char* file_relative = fpath + source_directory_len;
+    while (file_relative[0] == '/') file_relative += 1;
+
     switch (sb->st_mode & S_IFMT) {    
     case S_IFREG:
     case S_IFLNK:
-        // printf("file: %s\n", fpath);
         StringList_add_nullterm(&file_list, fpath);
         break;
     case S_IFDIR:
+        // TODO: copy directories
         printf("dir: %s\n", fpath);
+        mkdirat(destination_directory_fd, file_relative, 0);
         break;
     }
     return 0;
@@ -122,6 +136,18 @@ int directory_entry_handler(const char* fpath, const struct stat* sb, int typefl
 /// Uses io_uring to asynchronously link every file
 int hardlink_directory_iouring(const char *src_dir, const char *dest_dir) {
     return 0;
+}
+
+void hardlink_directory_structure(const char *src_dir, const char *dest_dir) {
+
+    // need to prepare globals for nftw callback
+    source_directory_len = strlen(src_dir);
+    destination_directory_fd = open(dest_dir, O_DIRECTORY);
+    nftw(src_dir, &copy_directories_add_filenames, 128, 0);
+
+    StringListIter iter = StringListIter_new(&file_list);
+    hardlink_file_list_iouring(&iter, src_dir, dest_dir);
+    StringList_free(file_list);
 }
 
 
@@ -160,18 +186,13 @@ int main(int argc, char *argv[]) {
     char* input = argv[1];
     char* output = argv[2];
 
-    nftw(input, &directory_entry_handler, 128, 0);
+    hardlink_directory_structure(input, output);
 
-    StringListIter iter = StringListIter_new(&file_list);
-    hardlink_file_list_iouring(&iter, input, output);
-
-    // iter = StringListIter_new(&file_list);
+    // StringListIter iter = StringListIter_new(&file_list);
     // char* filename;
     // printf("\n\n");
     // while ( (filename = StringListIter_next(&iter)) != NULL) {
     //     printf("file: %s\n", filename);
     // }
-
-    StringList_free(file_list);
 }
 #endif
