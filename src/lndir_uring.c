@@ -18,6 +18,8 @@ struct StringList {
 };
 typedef struct StringList StringList;
 
+
+
 #define STRINGLIST_BLOCK_SIZE 4096
 #define MAX_SQE 128
 // Must be smaller than MAX_SQE
@@ -59,25 +61,51 @@ StringList *StringList_add_nullterm(StringList *list, char *string) {
 }
 
 
-/// Iterates over the strings in a string list
-/// Before the firstr call, caller should set the len field to 0
-StringList *StringList_next(StringList *list, char **string_out) {
+
+struct StringListIter {
+    struct StringList list;
+};
+typedef struct StringListIter StringListIter;
+
+StringListIter StringListIter_new(StringList* list) {
+    StringListIter iter;
+    iter.list = *list;
+    iter.list.len = 0;
+    return iter;
+}
+
+
+/// Returns the next string in a string list block. Returns NULL if it is at the end of the block
+char* StringList_next_string(StringList *list) {
     char *start = list->data + list->len;
     if (*start == 0) {
-        if (list->next == NULL) {
-            string_out = NULL;
-            return NULL;
-        } else {
-            list->next->len = 0;
-            return StringList_next(list->next, string_out);
-        }
+        return NULL;
     } else {
         int len = strlen(start);
         list->len += len + 1;
-        *string_out = start;
-        return list;
+        return start;
     }
 }
+
+char* StringListIter_next(StringListIter* iter) {
+    char* str = StringList_next_string(&iter->list);
+    int i = 0;
+    while (str == NULL) {
+        assert(i++ < 3 && "StringListIterNext looping"); // Almost certainly something wrong if this triggers
+        // Push to next block
+        if (iter->list.next == NULL) {
+            return NULL;
+        } else {
+            StringList* next = iter->list.next;
+            iter->list.len = 0;
+            iter->list.data = next->data;
+            iter->list.next = next->next;
+            str = StringList_next_string(&iter->list);
+        }
+    }
+    return str;
+}
+
 
 /// Returns the number of results handled
 int iouring_handle_results(struct io_uring *ring) {
@@ -100,8 +128,7 @@ int iouring_handle_results(struct io_uring *ring) {
     return count;
 }
 
-int hardlink_file_list_iouring(StringList *file_list, const char *src_dir,
-                               const char *dest_dir) {
+int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, const char *dest_dir) {
     if (src_dir == NULL || dest_dir == NULL)
         return 1;
 
@@ -113,11 +140,12 @@ int hardlink_file_list_iouring(StringList *file_list, const char *src_dir,
     int src_fd = open(src_dir, O_DIRECTORY);
     int dest_fd = open(dest_dir, O_DIRECTORY);
 
+
     int submission_count = 0;
     int handled_count = 0;
-    char *file = NULL;
+    char* file = StringListIter_next(file_list);
+
     while (file_list != NULL) {
-        file_list = StringList_next(file_list, &file);
         struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
         // get_sqe returns NULL when the queue is full
         while (sqe == NULL) {
@@ -132,6 +160,7 @@ int hardlink_file_list_iouring(StringList *file_list, const char *src_dir,
         if (submission_count % SQE_SUBMISSION_SIZE == 0) {
             result = io_uring_submit(&ring);
         }
+        file = StringListIter_next(file_list);
     }
 
     while (handled_count < submission_count) {
@@ -150,34 +179,9 @@ int hardlink_directory_iouring(const char *src_dir, const char *dest_dir) {
     return 0;
 }
 
-
-
-int test_string_list() {
-    StringList* list = StringList_new();
-    StringList* list_iter = list;
-
-    for (int i = 0; i < 200; i++) {
-        list = StringList_add_nullterm(list, "string 1");
-        list = StringList_add_nullterm(list, "string 2");
-        list = StringList_add_nullterm(list, " 3");
-        list = StringList_add_nullterm(list, "string 4");
-    }
-
-    list_iter->len = 0;
-    char* out = NULL;
-    while (true) {
-        list_iter = StringList_next(list_iter, &out);
-        if (list_iter == NULL) break;
-        if (out == NULL) {
-            printf("null output\n");
-            break;
-        }
-        printf("string: '%s'\n", out);
-    }
-
-    return 0;
-}
-
+#ifndef TEST_RUNNER
 int main() {
-    test_string_list();
+    StringList* list = StringList_new();
+    StringList* first_list = list;
 }
+#endif
