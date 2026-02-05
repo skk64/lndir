@@ -41,10 +41,10 @@ int test_linking_file_list() {
         list = StringList_add_nullterm(list, "bar");
     }
 
-    // hardlink_file_list_iouring(&iter, "tests/basic_in", "tests/basic_out");
+    hardlink_file_list_iouring(&iter, "tests/basic_in", "tests/basic_out");
 }
 
 int main() {
-    test_string_list();
-    // test_linking_file_list();
+    // test_string_list();
+    test_linking_file_list();
 }

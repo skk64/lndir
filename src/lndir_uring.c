@@ -116,6 +116,7 @@ char* StringListIter_next_free(StringListIter* iter) {
 
 /// Returns the number of results handled
 int iouring_handle_results(struct io_uring *ring) {
+    printf("iouring_handle_results:\n");
     struct io_uring_cqe *cqe;
     int result;
     int count = 0;
@@ -152,7 +153,8 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
     int handled_count = 0;
     char* file = StringListIter_next(file_list);
 
-    while (file_list != NULL) {
+    while (file != NULL) {
+        printf("link file: %s\n", file);
         struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
         // get_sqe returns NULL when the queue is full
         while (sqe == NULL) {
@@ -165,12 +167,13 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
         submission_count += 1;
 
         if (submission_count % SQE_SUBMISSION_SIZE == 0) {
-            result = io_uring_submit(&ring);
+            io_uring_submit(&ring);
         }
         file = StringListIter_next(file_list);
     }
-
+    io_uring_submit(&ring);
     while (handled_count < submission_count) {
+        printf("handled/submitted:   %d/%d\n", handled_count, submission_count);
         // block until ready
         struct io_uring_cqe *cqe;
         io_uring_wait_cqe(&ring, &cqe);
@@ -178,6 +181,7 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
         int results_handled = iouring_handle_results(&ring);
         handled_count += results_handled;
     }
+    printf("handled/submitted:   %d/%d\n", handled_count, submission_count);
     return 0;
 }
 
