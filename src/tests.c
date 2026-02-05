@@ -5,7 +5,7 @@
 
 int test_string_list() {
     StringList list = StringList_new();
-    StringListIter iter = StringListIter_new(&list);
+    StringListIter iter = StringList_iterate(&list);
 
     for (int i = 0; i < 40; i++) {
         StringList_add_nullterm(&list, "string 1");
@@ -29,7 +29,7 @@ int test_string_list() {
 int test_linking_file_list() {
 
     StringList list = StringList_new();
-    StringListIter iter = StringListIter_new(&list);
+    StringListIter iter = StringList_iterate(&list);
 
     for (int i = 0; i < 1; i++) {
         StringList_add_nullterm(&list, "a");

@@ -23,6 +23,8 @@
 
 
 
+/// For each result in the completion queue, if it was an error, print to stderr
+/// 
 /// Returns the number of results handled
 int iouring_handle_results(struct io_uring *ring) {
     printf("iouring_handle_results:\n");
@@ -45,8 +47,15 @@ int iouring_handle_results(struct io_uring *ring) {
     return count;
 }
 
-int hardlink_file_list_iouring_fd(StringListIter *file_list, int src_dir_len, int src_dir_fd, int dest_dir_fd) {
-    if (src_dir_fd < 0 || dest_dir_fd < 0 || src_dir_len <= 0) return 1;
+/// For each file in the file list, hard links that file from the source directory to destination directory
+/// If any hardlink fails, the result is ignored from the return value of this function
+/// However, stderr is printed to.
+/// 
+/// Returns 0 on success
+/// If io_uring fails, returns -errno
+/// if the directories are invalid, returns 1
+int hardlink_file_list_iouring_fd(StringListIter *file_list, int src_dir_fd, int dest_dir_fd) {
+    if (src_dir_fd < 0 || dest_dir_fd < 0) return 1;
 
     struct io_uring ring;
     int result = io_uring_queue_init(MAX_SQE, &ring, 0);
@@ -56,11 +65,9 @@ int hardlink_file_list_iouring_fd(StringListIter *file_list, int src_dir_len, in
     int submission_count = 0;
     int handled_count = 0;
 
-    char* file;
-    while ((file = StringListIter_next(file_list)) != NULL) {
-        printf("link file: %s\n", file);
-        char* file_relative = file + src_dir_len;
-        while (file_relative[0] == '/') file_relative += 1;
+    char* file_path;
+    while ((file_path = StringListIter_next(file_list)) != NULL) {
+        printf("link file: %s\n", file_path);
 
         struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
         // get_sqe returns NULL when the queue is full
@@ -69,8 +76,8 @@ int hardlink_file_list_iouring_fd(StringListIter *file_list, int src_dir_len, in
             handled_count += results_handled;
             sqe = io_uring_get_sqe(&ring);
         }
-        io_uring_prep_linkat(sqe, src_dir_fd, file_relative, dest_dir_fd, file_relative, 0);
-        io_uring_sqe_set_data(sqe, file);
+        io_uring_prep_linkat(sqe, src_dir_fd, file_path, dest_dir_fd, file_path, 0);
+        io_uring_sqe_set_data(sqe, file_path);
         submission_count += 1;
 
         if (submission_count % SQE_SUBMISSION_SIZE == 0) {
@@ -94,11 +101,17 @@ int hardlink_file_list_iouring_fd(StringListIter *file_list, int src_dir_len, in
     return 0;
 }
 
+/// For each file in the file list, hard links that file from the source directory to destination directory
+/// If any hardlink fails, the result is ignored from the return value of this function
+/// However, stderr is printed to.
+/// 
+/// Returns 0 on success
+/// If io_uring fails, returns -errno
+/// if the directories are invalid, returns 1
 int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, const char *dest_dir) {
     int src_fd = open(src_dir, O_DIRECTORY);
     int dest_fd = open(dest_dir, O_DIRECTORY);
-    int src_dir_len = strlen(src_dir);
-    int result = hardlink_file_list_iouring_fd(file_list, src_dir_len, src_fd, dest_fd);
+    int result = hardlink_file_list_iouring_fd(file_list, src_fd, dest_fd);
     close(src_fd);
     close(dest_fd);
     return result;
@@ -108,91 +121,46 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
 /// These are needed for the nftw callback
 // char* source_directory;
 // char* destination_directory;
-int source_directory_len = -1;
-int destination_directory_fd = -1;
-struct StringList file_list;
+int lndir_source_directory_len = -1;
+int lndir_destination_directory_fd = -1;
+struct StringList lndir_file_list = {};
 
+/// nftw callback
+/// For each directory in source, it creates a matching directory at the destination
+/// For each file in source, it adds the relative path to file_list
 int copy_directories_add_filenames(const char* fpath, const struct stat* sb, int typeflag, struct FTW* ftwbuf) {
-    assert(source_directory_len > 0);
-    assert(destination_directory_fd > 0);
-    const char* file_relative = fpath + source_directory_len;
+    assert(lndir_source_directory_len > 0);
+    assert(lndir_destination_directory_fd > 0);
+    const char* file_relative = fpath + lndir_source_directory_len;
     while (file_relative[0] == '/') file_relative += 1;
 
     switch (sb->st_mode & S_IFMT) {    
     case S_IFREG:
     case S_IFLNK:
-        StringList_add_nullterm(&file_list, fpath);
+        StringList_add_nullterm(&lndir_file_list, file_relative);
         break;
     case S_IFDIR:
-        // TODO: copy directories
         printf("dir: %s\n", fpath);
-        mkdirat(destination_directory_fd, file_relative, 0);
+        mkdirat(lndir_destination_directory_fd, file_relative, 0);
         break;
     }
     return 0;
 }
 
 
-/// Uses io_uring to asynchronously link every file
-int hardlink_directory_iouring(const char *src_dir, const char *dest_dir) {
-    return 0;
-}
-
 void hardlink_directory_structure(const char *src_dir, const char *dest_dir) {
-
     // need to prepare globals for nftw callback
-    source_directory_len = strlen(src_dir);
-    destination_directory_fd = open(dest_dir, O_DIRECTORY);
+    lndir_source_directory_len = strlen(src_dir);
+    lndir_destination_directory_fd = open(dest_dir, O_DIRECTORY);
+    int source_directory_fd = open(src_dir, O_DIRECTORY);
+
     nftw(src_dir, &copy_directories_add_filenames, 128, 0);
 
-    StringListIter iter = StringListIter_new(&file_list);
-    hardlink_file_list_iouring(&iter, src_dir, dest_dir);
-    StringList_free(file_list);
+    StringListIter iter = StringList_iterate(&lndir_file_list);
+    hardlink_file_list_iouring_fd(&iter, source_directory_fd, lndir_destination_directory_fd);
+
+    close(source_directory_fd);
+    close(lndir_destination_directory_fd);
+    StringList_free(lndir_file_list);
 }
 
-
-void print_help(const char *prog_name) {
-    const char *help_string =
-        "Usage: %s [OPTIONS] <source_directory> <target_directory>\n"
-        "Recursively create hard links for all files in <source_directory> "
-        "within <target_directory>.\n"
-        "Will create duplicate directories in <target_directory>.\n"
-        "\n"
-        "Options:\n"
-        "  -h, --help        Show this help message and exit\n"
-        "\n"
-        "Example:\n"
-        "  %s /path/to/source /path/to/target\n"
-        "  %s relative/source relative/target\n";
-    printf(help_string, prog_name, prog_name, prog_name);
-}
-
-
-#ifndef TEST_RUNNER
-int main(int argc, char *argv[]) {
-    file_list = StringList_new();
-
-    if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
-        print_help(argv[0]);
-        exit(EXIT_SUCCESS);
-    }
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s <source_directory> <target_directory>\n",
-                argv[0]);
-        fprintf(stderr, "Try '%s --help' for more information\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-
-    char* input = argv[1];
-    char* output = argv[2];
-
-    hardlink_directory_structure(input, output);
-
-    // StringListIter iter = StringListIter_new(&file_list);
-    // char* filename;
-    // printf("\n\n");
-    // while ( (filename = StringListIter_next(&iter)) != NULL) {
-    //     printf("file: %s\n", filename);
-    // }
-}
-#endif

@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+
+#include "string_list.h"
+
 #define STRINGLIST_START_BLOCK_SIZE 128
 
 #ifndef max
@@ -18,14 +21,6 @@
 
 #define next_power_of_2(x) (1 << (sizeof(x) - __builtin_clz(x - 1)))
 
-
-
-struct StringListBlock {
-    struct StringListBlock *next;
-    int len;
-    int cap;
-};
-typedef struct StringListBlock StringListBlock;
 
 StringListBlock *StringListBlock_new_blocksize(int blocksize) {
     assert(blocksize > 0);
@@ -65,11 +60,6 @@ StringListBlock *StringListBlock_add_nullterm(StringListBlock *list, const char 
 }
 
 
-struct StringList {
-    StringListBlock* first;
-    StringListBlock* last;
-};
-typedef struct StringList StringList;
 
 
 StringList StringList_new() {
@@ -88,6 +78,9 @@ void StringList_add(StringList *list, const char *string, int string_len) {
 
 /// Add a null-terminated string to a string list.
 void StringList_add_nullterm(StringList *list, const char *string) {
+    // Initialise if empty
+    if (list->first == NULL) *list = StringList_new();
+    
     int string_len = strlen(string);
     list->last = StringListBlock_add(list->last, string, string_len);
 }
@@ -101,13 +94,9 @@ void StringList_free(StringList list) {
     }
 }
 
-struct StringListIter {
-    struct StringListBlock* list;
-    int len;
-};
-typedef struct StringListIter StringListIter;
 
-StringListIter StringListIter_new(const StringList* list) {
+StringListIter StringList_iterate(StringList* list) {
+    if (list->first == NULL) *list = StringList_new();
     StringListIter iter;
     iter.list = list->first;
     iter.len = 0;
