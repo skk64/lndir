@@ -80,8 +80,11 @@ fn ln_all_files_in_dir(io: Io, stdout: *Io.Writer, stderr: *Io.Writer, source_pa
     const destination_path_span: []const u8 = std.mem.span(destination_path);
     const source_path_span: []const u8 = std.mem.span(source_path);
 
-    const cwd = std.Io.Dir.cwd();
+    if (is_subpath(source_path_span, destination_path_span)) {
+        try stderr.print("Cannot link into source directory\n", .{});
+    }
 
+    const cwd = std.Io.Dir.cwd();
     const destination = try std.Io.Dir.createDirPathOpen(cwd, io, destination_path_span, .{
         .open_options = .{
             .iterate = true,
@@ -97,18 +100,12 @@ fn ln_all_files_in_dir(io: Io, stdout: *Io.Writer, stderr: *Io.Writer, source_pa
         },
     });
 
-    var file_buf: [std.posix.PATH_MAX]u8 = undefined;
-    var source_path_buf: [std.posix.PATH_MAX]u8 = undefined;
-
-    const source_path_absolute_len = try source.realPath(io, &source_path_buf);
-    const source_path_absolute = source_path_buf[0..source_path_absolute_len];
-
-    // Need memory for walker and file path buffers
+    // Need memory for walker
     // Walker uses bounded amount of memory, defined by maximum path lengths
     // so FixedBufferAllocator is suitable
     // Maximum memory requirement determined by getdents64() syscall (max of u16)
-    // plus 2 paths (and some extra for allocator overhead)
-    const mem_size = std.posix.PATH_MAX * 2 + std.math.maxInt(u16) + 0x1000;
+    // and some extra for allocator overhead
+    const mem_size = std.math.maxInt(u16) + 0x1000;
     const array_size = switch (builtin.link_libc) {
         true => 0,
         false => mem_size,
@@ -119,7 +116,6 @@ fn ln_all_files_in_dir(io: Io, stdout: *Io.Writer, stderr: *Io.Writer, source_pa
         false => &array_buf,
     };
     defer if (builtin.link_libc) std.heap.c_allocator.free(mem_buffer);
-
     var fba = std.heap.FixedBufferAllocator.init(mem_buffer);
     const allocator = fba.allocator();
 
@@ -140,34 +136,20 @@ fn ln_all_files_in_dir(io: Io, stdout: *Io.Writer, stderr: *Io.Writer, source_pa
         try stderr.print("Error accessing files: {any}\n\n", .{e});
         break :blk null;
     }) |p| {
+        // The directory depth shouldn't get this high. Probably an error if it does
+        if (p.depth() > 128) return error.DirectoryDepthTooHigh;
 
-        // skip anything that would cause a recursive loop. (that would cause a file to be linked more than once)
-        const file_path_absolute_len = try destination.realPath(io, &file_buf);
-        var file_path_absolute = file_buf[0 .. file_path_absolute_len + 1];
-        file_buf[file_path_absolute.len - 1] = '/';
-        @memcpy(file_buf[file_path_absolute.len..][0..p.path.len], p.path);
-        file_path_absolute.len += p.path.len + 1;
-        if (std.mem.startsWith(u8, file_path_absolute, source_path_absolute)) {
-            try stderr.print(overwrite_prev_line ++ "Cannot create link inside source directory. Skipping {s}\n\n", .{p.path});
-            continue;
-        }
         switch (p.kind) {
             .file, .sym_link => {
-                // Infallible as memory is allocated already
-                const source_file = std.fs.path.joinZ(allocator, &.{ source_path_span, p.path }) catch unreachable;
-                const destination_file = std.fs.path.joinZ(allocator, &.{ destination_path_span, p.path }) catch unreachable;
-
-                const link_result = std.os.linux.errno(std.os.linux.link(source_file, destination_file));
-                if (link_result == .SUCCESS) {
-                    file_count += 1;
-                    try stderr.print(overwrite_prev_line ++ "Linking  {d} files\n", .{file_count});
-                } else {
-                    try stderr.print(overwrite_prev_line ++ "Error creating link '{s}': {any}\n\n", .{ destination_file, link_result });
-                }
-                allocator.free(destination_file);
-                allocator.free(source_file);
+                std.Io.Dir.hardLink(source, p.path, destination, p.path, io, .{ .follow_symlinks = true }) catch |e| {
+                    try stderr.print(overwrite_prev_line ++ "Error creating link '{s}': {any}\n\n", .{ p.path, e });
+                    continue;
+                };
+                file_count += 1;
+                try stderr.print(overwrite_prev_line ++ "Linking  {d} files\n", .{file_count});
             },
             .directory => {
+                // destination.createDirPath(io, p.path);
                 destination.createDir(io, p.path, .default_dir) catch |err| switch (err) {
                     error.PathAlreadyExists => {
                         // Should always continue in this case
@@ -186,4 +168,18 @@ fn ln_all_files_in_dir(io: Io, stdout: *Io.Writer, stderr: *Io.Writer, source_pa
         }
     }
     try stderr.print(overwrite_prev_line ++ "Linked  {d} files\n", .{file_count});
+}
+
+///  **  /a/b/c, /a/b/d -> false
+///  **  /a/b/c, /a/b/c/d -> true
+///  **  /a/b/c, /a/b/c_d -> false
+///  **  /a/b/c, /a//b/c/d -> true
+fn is_subpath(root_path: []const u8, potential_subpath: []const u8) bool {
+    const sep = std.fs.path.sep;
+    if (std.mem.startsWith(u8, potential_subpath, root_path)) {
+        if (potential_subpath.len == root_path.len) return true;
+        assert(potential_subpath.len > root_path.len);
+        if (potential_subpath[root_path.len] == sep) return true;
+    }
+    return false;
 }

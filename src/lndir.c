@@ -1,7 +1,11 @@
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <liburing.h>
 #include <linux/limits.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -23,9 +27,9 @@ void print_help(const char *prog_name) {
     printf(help_string, prog_name, prog_name, prog_name);
 }
 
-/// Creates the directory dest_dir, and links all files from src_dir to
-/// dest_dir recursively All links are hard links, as a symbolic link of the
-/// directory can be done with just ln -s
+
+/// Creates the directory dest_dir, and links all files from src_dir to dest_dir recursively.
+/// All links are hard links, behaving similarly to a symbolic link of the directory done with `ln -s`
 ///
 /// Will return failure if the src_dir cannot be opened
 /// Return 0 on success, or -1 on failure, with errno set
@@ -103,6 +107,12 @@ int link_all_files_in_dir(const char *src_dir, const char *dest_dir) {
 }
 
 int main(int argc, char *argv[]) {
+
+    int dir_fd = open("src/", O_DIRECTORY);
+    printf("dir_fd: %d\n", dir_fd);
+
+    return 0;
+
     if (argc == 2 &&
         (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
         print_help(argv[0]);
