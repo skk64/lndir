@@ -17,14 +17,11 @@ Files can be safely reorganised and renamed without risk of accidental deletion.
 
 This acts as a more general version of GNU stow. Create a directory with dotfiles in it, as they would be in your home directory, then run lndir to link them to their correct locations.
 
-### Application specific uses
-
-A directory of movies can be structured for multiple separate apps (e.g. Jellyfin and Plex) without using extra storage space.
-
 ## Compilation
 
-Requires zig >= 0.14
+Requires liburing, which may not be installed by default, but can be e.g., on Ubuntu with `apt-get install liburing-dev`
 
+To compile, run:
 ```
-zig build -Doptimize=ReleaseSmall
+make
 ```
