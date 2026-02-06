@@ -157,7 +157,7 @@ int copy_directories_add_filenames(const char* fpath, const struct stat* sb, int
     switch (sb->st_mode & S_IFMT) {    
     case S_IFREG:
     case S_IFLNK:
-        debug_printf("file:             %s\n", fpath);
+        debug_printf("file: %s\n", fpath);
         StringList_add_nullterm(&lndir_file_list, file_relative);
         break;
     case S_IFDIR:

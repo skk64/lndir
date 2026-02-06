@@ -1,8 +1,5 @@
 const std = @import("std");
 
-// Although this function looks imperative, note that its job is to
-// declaratively construct a build graph that will be executed by an external
-// runner.
 pub fn build(b: *std.Build) void {
     // options
     const staticBinary = b.option(bool, "static", "compile with musl to make a static executable") orelse false;
@@ -36,23 +33,28 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     // c exe
-    if (false) {
-        const c_exe_mod = b.createModule(.{
-            // Wrong:
-            .root_source_file = b.path("src/lndir.c"),
-            .target = target,
-            .optimize = optimize,
-        });
+    const c_exe_mod = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+    });
+    const WerrorIfDebug = if (optimize == .Debug) "-Werror" else "";
+    // c_exe_mod.addCSourceFile(.{ .file = b.path("src/lndir.c"), .flags = &.{WerrorIfDebug} });
+    c_exe_mod.addCSourceFiles(.{
+        .files = &.{
+            "src/lndir_uring.c",
+            "src/string_list.c",
+            "src/main.c",
+        },
+        .flags = &.{WerrorIfDebug},
+    });
+    c_exe_mod.link_libc = true;
+    c_exe_mod.linkSystemLibrary("uring", .{ .preferred_link_mode = .static });
 
-        const c_exe = b.addExecutable(.{
-            .name = "lndir_c",
-            .root_module = c_exe_mod,
-        });
-        const WerrorIfDebug = if (optimize == .Debug) "-Werror" else "";
-        c_exe_mod.addCSourceFile(.{ .file = b.path("src/lndir.c"), .flags = &.{WerrorIfDebug} });
-        c_exe_mod.link_libc = true;
-        b.installArtifact(c_exe);
-    }
+    const c_exe = b.addExecutable(.{
+        .name = "lndir_c",
+        .root_module = c_exe_mod,
+    });
+    b.installArtifact(c_exe);
 
     // run steps
     const run_cmd = b.addRunArtifact(exe);
