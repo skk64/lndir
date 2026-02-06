@@ -23,4 +23,4 @@ $(EXEC):
 
 
 clean:
-	rm -f $(OBJ) $(EXEC) unity
+	rm -f $(OBJ) $(EXEC)
