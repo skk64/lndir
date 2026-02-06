@@ -18,9 +18,11 @@
 
 #include "string_list.h"
 
+// Size of the Submission Queue
 #define MAX_SQE 128
+// Number of submissions to queue before submitting
 // Must be smaller than MAX_SQE
-#define SQE_SUBMISSION_SIZE 16
+#define SQE_SUBMISSION_SIZE 64
 
 #ifndef debug_printf
 #ifdef DEBUG
