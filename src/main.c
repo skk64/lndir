@@ -1,9 +1,11 @@
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
-#include "lndir.h"
+// #define DEBUG
 
+#include "lndir.h"
 
 void print_help(const char *prog_name) {
     const char *help_string =
@@ -39,12 +41,5 @@ int main(int argc, char *argv[]) {
     char* output = argv[2];
 
     hardlink_directory_structure(input, output);
-
-    // StringListIter iter = StringListIter_new(&file_list);
-    // char* filename;
-    // printf("\n\n");
-    // while ( (filename = StringListIter_next(&iter)) != NULL) {
-    //     printf("file: %s\n", filename);
-    // }
 }
 
