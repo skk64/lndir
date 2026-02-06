@@ -65,9 +65,6 @@ StringListBlock *StringListBlock_add_nullterm(StringListBlock *list, const char 
     return StringListBlock_add(list, string, len);
 }
 
-
-
-
 StringList StringList_new() {
   StringList list;
   list.first = StringListBlock_new();
