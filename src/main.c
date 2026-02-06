@@ -1,14 +1,14 @@
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 // #define DEBUG
 
 #include "lndir.h"
 
-void print_help(const char *prog_name) {
-    const char *help_string =
+void print_help(const char* prog_name) {
+    const char* help_string =
         "Usage: %s [OPTIONS] <source_directory> <target_directory>\n"
         "Recursively create hard links for all files in <source_directory> "
         "within <target_directory>.\n"
@@ -23,16 +23,13 @@ void print_help(const char *prog_name) {
     printf(help_string, prog_name, prog_name, prog_name);
 }
 
-
-int main(int argc, char *argv[]) {
-
+int main(int argc, char* argv[]) {
     if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
         print_help(argv[0]);
         exit(EXIT_SUCCESS);
     }
     if (argc != 3) {
-        fprintf(stderr, "Usage: %s <source_directory> <target_directory>\n",
-                argv[0]);
+        fprintf(stderr, "Usage: %s <source_directory> <target_directory>\n", argv[0]);
         fprintf(stderr, "Try '%s --help' for more information\n", argv[0]);
         exit(EXIT_FAILURE);
     }
@@ -42,4 +39,3 @@ int main(int argc, char *argv[]) {
 
     hardlink_directory_structure(input, output);
 }
-

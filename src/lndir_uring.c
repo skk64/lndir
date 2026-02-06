@@ -1,23 +1,22 @@
-#define _XOPEN_SOURCE 500 
+#define _XOPEN_SOURCE 500
 #define _GNU_SOURCE
 
 // #define DEBUG
 
-#include <dirent.h>
 #include <assert.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <ftw.h>
+#include <liburing.h>
 #include <linux/limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <liburing.h>
-#include <ftw.h>
+#include <unistd.h>
 
 #include "string_list.h"
-
 
 #define MAX_SQE 128
 // Must be smaller than MAX_SQE
@@ -25,12 +24,11 @@
 
 #ifndef debug_printf
 #ifdef DEBUG
-#define debug_printf(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__); 
-#else 
-#define debug_printf(fmt, ...) 
+#define debug_printf(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__);
+#else
+#define debug_printf(fmt, ...)
 #endif
 #endif
-
 
 struct LinkResults {
     int successes;
@@ -39,23 +37,21 @@ struct LinkResults {
 typedef struct LinkResults LinkResults;
 
 /// For each result in the completion queue, if it was an error, print to stderr
-/// 
+///
 /// Returns the number of results handled
-LinkResults iouring_handle_results(struct io_uring *ring) {
+LinkResults iouring_handle_results(struct io_uring* ring) {
     LinkResults results = {};
     debug_printf("iouring_handle_results:\n");
-    struct io_uring_cqe *cqe;
+    struct io_uring_cqe* cqe;
     int result;
     int count = 0;
     result = io_uring_peek_cqe(ring, &cqe);
     while (result == 0) {
         count += 1;
-        char *path = io_uring_cqe_get_data(cqe);
+        char* path = io_uring_cqe_get_data(cqe);
         if (cqe->res < 0) {
-            char *errmsg = strerror(-cqe->res);
-            if (errmsg != NULL) {
-                fprintf(stderr, "%s: %s\n", errmsg, path);
-            }
+            char* errmsg = strerror(-cqe->res);
+            if (errmsg != NULL) fprintf(stderr, "%s: %s\n", errmsg, path);
         } else {
             results.successes += 1;
         }
@@ -69,25 +65,23 @@ LinkResults iouring_handle_results(struct io_uring *ring) {
 /// For each file in the file list, hard links that file from the source directory to destination directory
 /// If any hardlink fails, the result is ignored from the return value of this function
 /// However, stderr is printed to.
-/// 
+///
 /// Returns 0 on success
 /// If io_uring fails, returns -errno
 /// if the directories are invalid, returns 1
-int hardlink_file_list_iouring_fd(StringListIter *file_list, int src_dir_fd, int dest_dir_fd) {
+int hardlink_file_list_iouring_fd(StringListIter* file_list, int src_dir_fd, int dest_dir_fd) {
     if (src_dir_fd < 0 || dest_dir_fd < 0) return 1;
 
     struct io_uring ring;
     int result = io_uring_queue_init(MAX_SQE, &ring, 0);
-    if (result != 0)
-        return result;
+    if (result != 0) return result;
 
     int submission_count = 0;
     LinkResults counts = {};
 
     char* file_path;
     while ((file_path = StringListIter_next(file_list)) != NULL) {
-
-        struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
+        struct io_uring_sqe* sqe = io_uring_get_sqe(&ring);
         // get_sqe returns NULL when the queue is full
         while (sqe == NULL) {
             LinkResults results_handled = iouring_handle_results(&ring);
@@ -109,7 +103,7 @@ int hardlink_file_list_iouring_fd(StringListIter *file_list, int src_dir_fd, int
     while (counts.total_handled < submission_count) {
         debug_printf("handled/submitted:   %d/%d\n", counts.total_handled, submission_count);
         // block until ready
-        struct io_uring_cqe *cqe;
+        struct io_uring_cqe* cqe;
         io_uring_wait_cqe(&ring, &cqe);
 
         LinkResults results_handled = iouring_handle_results(&ring);
@@ -124,11 +118,11 @@ int hardlink_file_list_iouring_fd(StringListIter *file_list, int src_dir_fd, int
 /// For each file in the file list, hard links that file from the source directory to destination directory
 /// If any hardlink fails, the result is ignored from the return value of this function
 /// However, stderr is printed to.
-/// 
+///
 /// Returns 0 on success
 /// If io_uring fails, returns -errno
 /// if the directories are invalid, returns 1
-int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, const char *dest_dir) {
+int hardlink_file_list_iouring(StringListIter* file_list, const char* src_dir, const char* dest_dir) {
     int src_fd = open(src_dir, O_DIRECTORY);
     int dest_fd = open(dest_dir, O_DIRECTORY);
     int result = hardlink_file_list_iouring_fd(file_list, src_fd, dest_fd);
@@ -136,7 +130,6 @@ int hardlink_file_list_iouring(StringListIter *file_list, const char *src_dir, c
     close(dest_fd);
     return result;
 }
-
 
 /// These are needed for the nftw callback
 // char* source_directory;
@@ -154,22 +147,21 @@ int copy_directories_add_filenames(const char* fpath, const struct stat* sb, int
     const char* file_relative = fpath + lndir_source_directory_len;
     while (file_relative[0] == '/') file_relative += 1;
 
-    switch (sb->st_mode & S_IFMT) {    
-    case S_IFREG:
-    case S_IFLNK:
-        debug_printf("file: %s\n", fpath);
-        StringList_add_nullterm(&lndir_file_list, file_relative);
-        break;
-    case S_IFDIR:
-        debug_printf("dir: %s\n", fpath);
-        mkdirat(lndir_destination_directory_fd, file_relative, sb->st_mode);
-        break;
+    switch (sb->st_mode & S_IFMT) {
+        case S_IFREG:
+        case S_IFLNK:
+            debug_printf("file: %s\n", fpath);
+            StringList_add_nullterm(&lndir_file_list, file_relative);
+            break;
+        case S_IFDIR:
+            debug_printf("dir: %s\n", fpath);
+            mkdirat(lndir_destination_directory_fd, file_relative, sb->st_mode);
+            break;
     }
     return 0;
 }
 
-
-void hardlink_directory_structure(const char *src_dir, const char *dest_dir) {
+void hardlink_directory_structure(const char* src_dir, const char* dest_dir) {
     int source_directory_fd = open(src_dir, O_DIRECTORY);
     // Create destination directory
     struct stat src_dir_stat;
@@ -190,4 +182,3 @@ void hardlink_directory_structure(const char *src_dir, const char *dest_dir) {
 
     StringList_free(lndir_file_list);
 }
-
