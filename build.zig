@@ -4,13 +4,9 @@ pub fn build(b: *std.Build) void {
     // options
     const staticBinary = b.option(bool, "static", "compile with musl to make a static executable") orelse false;
     const no_llvm = b.option(bool, "no-llvm", "Don't use LLVM backend for compilation") orelse false;
+    // liburing doesn't compile with a musl target (as of 0.16)
     // const target = b.standardTargetOptions(.{ .default_target = if (staticBinary) .{ .abi = .musl } else .{} });
     const target = b.standardTargetOptions(.{});
-    var c_target = target;
-    if (staticBinary) {
-        c_target.result.abi = .musl;
-        c_target.query.abi = .musl;
-    }
     const optimize = b.standardOptimizeOption(.{});
 
     const exe_mod = b.createModule(.{
@@ -18,19 +14,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
-    // zig exe
-    const exe = b.addExecutable(.{
-        .name = "lndir",
-        .root_module = exe_mod,
-    });
-    if (no_llvm) {
-        exe.use_llvm = false;
-    }
-    if (!staticBinary) {
-        exe_mod.link_libc = true;
-    }
-    b.installArtifact(exe);
 
     // c exe
     const c_exe_mod = b.createModule(.{
@@ -57,7 +40,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(c_exe);
 
     // run steps
-    const run_cmd = b.addRunArtifact(exe);
+    const run_cmd = b.addRunArtifact(c_exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
         run_cmd.addArgs(args);
