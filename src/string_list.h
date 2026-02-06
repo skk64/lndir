@@ -24,6 +24,11 @@ while ((str = StringListIter_next(&iter)) != NULL) {
 
 */
 
+
+#ifndef STRING_LIST_H
+#define STRING_LIST_H
+
+
 struct StringListBlock {
     struct StringListBlock *next;
     int len;
@@ -53,3 +58,6 @@ void StringList_free(StringList list);
 StringListIter StringList_iterate(StringList* list);
 
 char* StringListIter_next(StringListIter* iter);
+
+
+#endif

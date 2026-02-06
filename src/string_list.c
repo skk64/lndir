@@ -1,7 +1,9 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
+// #define DEBUG
 #include "string_list.h"
 
 #define STRINGLIST_START_BLOCK_SIZE 128
@@ -13,10 +15,12 @@
 #define min(a, b) a < b ? a : b;
 #endif
 
+#ifndef debug_printf
 #ifdef DEBUG
 #define debug_printf(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__); 
 #else 
 #define debug_printf(fmt, ...) 
+#endif
 #endif
 
 #define next_power_of_2(x) (1 << (sizeof(x) - __builtin_clz(x - 1)))
@@ -41,6 +45,8 @@ StringListBlock *StringListBlock_new() {
 /// should be kept and used for iteration
 StringListBlock* StringListBlock_add(StringListBlock *list, const char *string, int string_len) {
     if (list == NULL) return NULL;
+
+    debug_printf("List: add string: %s\n", string);
 
     // Need + 2 so the iterator works as expected
     if (string_len + list->len + 2 >= list->cap) {
@@ -105,15 +111,14 @@ StringListIter StringList_iterate(StringList* list) {
 
 
 char* StringListIter_next(StringListIter* iter) {
-    StringListBlock* list = iter->list;
-    char* str = (char*)list + sizeof(StringListBlock) + iter->len;
+    char* str = (char*)iter->list + sizeof(StringListBlock) + iter->len;
     if (*str == 0) {
         // Try getting next block
         debug_printf("iter: end of block\n");
-        if (list->next == NULL) return NULL;
-        iter->list = list->next;
+        if (iter->list->next == NULL) return NULL;
+        iter->list = iter->list->next;
         iter->len = 0;
-        str = (char*)list + sizeof(StringListBlock) + iter->len;
+        str = (char*)iter->list + sizeof(StringListBlock);
         assert(str != NULL);
     }
     int len = strlen(str);
