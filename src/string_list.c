@@ -57,7 +57,6 @@ StringListBlock* StringListBlock_add(StringListBlock *list, const char *string, 
     // Need + 2 so the iterator works as expected
     if (string_len + list->len + 2 >= list->cap) {
         int string_len_next = next_power_of_2(string_len);
-
         int new_blocksize = max(list->cap * 2, string_len_next);
         StringListBlock *new_list = StringListBlock_new_blocksize(new_blocksize);
         list->next = new_list;

@@ -1,6 +1,9 @@
 /// To run the tests, run:
 /// `zig build test`
 ///
+/// To automatically build as source files are edited:
+/// `zig build --watch --summary all`
+///
 const std = @import("std");
 const zon = @import("build.zig.zon");
 
