@@ -138,7 +138,7 @@ int hardlink_file_list_iouring(StringListIter* file_list, const char* src_dir, c
 // char* destination_directory;
 int lndir_source_directory_len = -1;
 int lndir_destination_directory_fd = -1;
-struct StringList lndir_file_list = {};
+struct StringList lndir_file_list = {0};
 
 /// nftw callback
 /// For each directory in source, it creates a matching directory at the destination
