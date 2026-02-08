@@ -4,7 +4,10 @@
  * When strings are added to the list, they are interned into a block.
  * Multiple blocks are connected as a singly-linked list.
  * 
- * This is designed for fast insertion and iteration and not much else.
+ * This data structure has some nice properties:
+ * - Iterating over the strings is fast, as they are all interned and adjacent.
+ * - Insertion is fast; no memory has to be moved.
+ * - Once inserted, a strings address location never changes. They are effectively 'pinned'.
 */
 
 /** Example Usage
@@ -23,8 +26,12 @@ while ((str = StringListIter_next(&iter)) != NULL) {
 }
 
 
-// Free all memory in the list:
+// Free all memory in the list
 StringList_free(&list);
+
+// After being freed, the list is reset to 0, and can be used again
+StringList_add(&list, str, str_len);
+// ...
 */
 
 
