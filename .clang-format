@@ -1,2 +1,14 @@
-BasedOnStyle: LLVM
+BasedOnStyle: Google
 IndentWidth: 4
+ColumnLimit: 125
+InsertBraces: true
+DerivePointerAlignment: false
+PointerAlignment: Left
+SeparateDefinitionBlocks: Always
+AlignAfterOpenBracket: AlwaysBreak
+AlignTrailingComments: true
+BreakInheritanceList: AfterColon
+BreakConstructorInitializers: AfterColon
+AllowShortIfStatementsOnASingleLine: WithoutElse
+# AllowShortBlocksOnASingleLine: Always
+# BinPackLongBracedList: false
