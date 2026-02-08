@@ -4,7 +4,9 @@
 
 #include "lndir.h"
 
-#define VERSION "0.0.1"
+#ifndef VERSION
+#define VERSION "unknown"
+#endif
 
 void print_version() {
     printf("%s\n", VERSION);

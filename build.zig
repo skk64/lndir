@@ -2,6 +2,7 @@
 /// `zig build test`
 ///
 const std = @import("std");
+const zon = @import("build.zig.zon");
 
 const c_source_files = [_][:0]const u8{
     "src/lndir.c",
@@ -26,6 +27,7 @@ pub fn build(b: *std.Build) void {
     exe_mod.addCSourceFile(.{ .file = b.path(c_main_file) });
     exe_mod.link_libc = true;
     exe_mod.linkSystemLibrary("uring", .{ .preferred_link_mode = .dynamic });
+    exe_mod.addCMacro("VERSION", "\"" ++ zon.version ++ " (z)\"");
 
     const c_exe = b.addExecutable(.{
         .name = "lndir",

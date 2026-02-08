@@ -1,15 +1,18 @@
-CC = gcc
-CFLAGS = -Wall -luring -O2
+VERSION = $(shell grep "^ *\.version = \"" build.zig.zon | sed 's/^.*\.version = //' | sed 's/,.*//')
+
+CC = cc
+CFLAGS = -Wall -luring -O2 -DVERSION=\"$(VERSION)\"
 
 EXEC = lndir
 SRC = src/main.c src/string_list.c src/lndir.c
+VERSION_FILE = build.zig.zon
+MAKEFILE = Makefile
 
 all: $(EXEC)
 
-
 ## Single compilation unit
 
-$(EXEC): $(SRC)
+$(EXEC): $(SRC) $(VERSION_FILE) $(MAKEFILE)
 	 $(CC) $(SRC) $(CFLAGS) -o $@
 
 
@@ -21,7 +24,7 @@ $(EXEC): $(SRC)
 # %.o: %.c
 # 	$(CC) -c $< -o $@
 
-# $(EXEC): $(OBJ)
+# $(EXEC): $(OBJ) $(VERSION_FILE) $(MAKEFILE)
 # 	$(CC) $(OBJ) $(CFLAGS) -o $@
 
 
