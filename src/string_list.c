@@ -2,13 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-// #include <limits.h>
 #include <stdint.h>
 
 // #define DEBUG
+
 #include "string_list.h"
 
-#define STRINGLIST_START_BLOCK_SIZE 128
+#define STRINGLIST_START_BLOCK_SIZE 256
 
 #ifndef max
 #define max(a, b) a < b ? b : a;
@@ -25,12 +25,12 @@
 #endif
 #endif
 
-// #define next_power_of_2(x) (1 << (sizeof(x) - __builtin_clz(x - 1)))
+#define next_power_of_2(x) ( x == 0 ? STRINGLIST_START_BLOCK_SIZE : 1 << (sizeof(x) * 8 - __builtin_clz(x - 1)))
 
-static inline int next_power_of_2(int x) {
-    int clz = __builtin_clz(x - 1);    
-    return 1 << clz;
-}
+// static inline int next_power_of_2(int x) {
+//     int clz = __builtin_clz(x - 1);    
+//     return 1 << clz;
+// }
 
 StringListBlock *StringListBlock_new_blocksize(int blocksize) {
     assert(blocksize > 0);
