@@ -10,7 +10,4 @@
 */
 void hardlink_directory_structure(const char* src_dir, const char* dest_dir);
 
-
-int hardlink_file_list_iouring(StringListIter* file_list, const char* src_dir, const char* dest_dir);
-
 #endif

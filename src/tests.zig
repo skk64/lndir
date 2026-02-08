@@ -4,6 +4,8 @@ const testing = std.testing;
 const sl = @import("string_list");
 const lndir = @import("lndir");
 
+extern fn hardlink_file_list_iouring(file_list: *sl.StringListIter, src_dir: [*:0]const u8, dest_dir: [*:0]const u8) c_int;
+
 test "lndir link" {
     const io = testing.io;
     var list: sl.StringList = .{ .first = null, .last = null };
@@ -34,7 +36,7 @@ test "lndir link" {
         const file = try std.Io.Dir.createFile(cwd, io, source_dir ++ "/" ++ f, .{});
         file.close(io);
     }
-    const result = lndir.hardlink_file_list_iouring(@ptrCast(&iter), source_dir, destination_dir);
+    const result = hardlink_file_list_iouring(@ptrCast(&iter), source_dir, destination_dir);
     try testing.expectEqual(0, result);
 
     inline for (files) |f| {
