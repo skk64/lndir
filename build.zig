@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) void {
     exe_mod.linkSystemLibrary("uring", .{ .preferred_link_mode = .dynamic });
 
     const c_exe = b.addExecutable(.{
-        .name = "lndir_c",
+        .name = "lndir",
         .root_module = exe_mod,
     });
     b.installArtifact(c_exe);
