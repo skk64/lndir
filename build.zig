@@ -5,7 +5,6 @@
 /// `zig build --watch --summary all`
 ///
 const std = @import("std");
-const zon = @import("build.zig.zon");
 
 const c_source_files = [_][:0]const u8{
     "src/lndir.c",
@@ -16,6 +15,8 @@ const c_main_file = "src/main.c";
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const version = read_version(b.allocator) catch @panic("Error reading version from build.zig.zon");
 
     // c exe
     const exe_mod = b.createModule(.{
@@ -30,7 +31,7 @@ pub fn build(b: *std.Build) void {
     exe_mod.addCSourceFile(.{ .file = b.path(c_main_file) });
     exe_mod.link_libc = true;
     exe_mod.linkSystemLibrary("uring", .{ .preferred_link_mode = .dynamic });
-    exe_mod.addCMacro("VERSION", "\"" ++ zon.version ++ " (z)\"");
+    exe_mod.addCMacro("VERSION", version);
 
     const c_exe = b.addExecutable(.{
         .name = "lndir",
@@ -68,6 +69,43 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_exe_unit_tests.step);
 }
 
+/// Reads the version string from build.zig.zon
+/// @import would also work, but this function checks the string at runtime,
+/// so modifying the version doesn't trigger recompiling the build script
+fn read_version(allocator: std.mem.Allocator) ![]const u8 {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const cwd = std.Io.Dir.cwd();
+
+    const zon_file = try std.Io.Dir.openFile(cwd, io, "build.zig.zon", .{ .mode = .read_only });
+    var zon_buf: [4096]u8 = undefined;
+    var reader = zon_file.reader(io, &zon_buf);
+    const interface = &reader.interface;
+    const zon_data = try interface.allocRemainingAlignedSentinel(allocator, .unlimited, .@"8", 0);
+
+    const ZonVersion = struct {
+        version: []const u8,
+    };
+    const zon_version = try std.zon.parse.fromSliceAlloc(
+        ZonVersion,
+        allocator,
+        zon_data,
+        null,
+        .{ .ignore_unknown_fields = true },
+    );
+
+    const version = blk: {
+        var buffer: std.ArrayList(u8) = .empty;
+        defer buffer.deinit(allocator);
+        try buffer.ensureTotalCapacity(allocator, 32);
+        buffer.appendAssumeCapacity('\"');
+        buffer.appendSliceAssumeCapacity(zon_version.version);
+        buffer.appendSliceAssumeCapacity(" (z)\"");
+        break :blk (try buffer.toOwnedSlice(allocator));
+    };
+    return version;
+}
+
 fn translate_c_file(
     b: *std.Build,
     opt: std.builtin.OptimizeMode,
@@ -85,3 +123,5 @@ fn translate_c_file(
     translate_c_mod.link_libc = true;
     return translate_c_mod;
 }
+
+fn read_zon(T: type) T {}
