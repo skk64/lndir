@@ -97,13 +97,15 @@ void StringList_add_nullterm(StringList *list, const char *string) {
     list->last = StringListBlock_add(list->last, string, string_len);
 }
 
-void StringList_free(StringList list) {
-    StringListBlock* current = list.first;
+void StringList_free(StringList* list) {
+    StringListBlock* current = list->first;
     while (current != NULL) {
         StringListBlock* next = current->next;
         free(current);
         current = next;
     }
+    list->first = NULL;
+    list->last = NULL;
 }
 
 

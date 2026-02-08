@@ -22,6 +22,9 @@ while ((str = StringListIter_next(&iter)) != NULL) {
     printf("%s\n", str);
 }
 
+
+// Free all memory in the list:
+StringList_free(&list);
 */
 
 
@@ -68,7 +71,7 @@ void StringList_add_nullterm(StringList *list, const char *string);
 /*
  * Frees all allocated memory in the list.
 */
-void StringList_free(StringList list);
+void StringList_free(StringList* list);
 
 /*
  * Returns an iterator that can be used to loop over every string in the list.

@@ -175,5 +175,5 @@ void hardlink_directory_structure(const char* src_dir, const char* dest_dir) {
     close(source_directory_fd);
     close(lndir_destination_directory_fd);
 
-    StringList_free(lndir_file_list);
+    StringList_free(&lndir_file_list);
 }
