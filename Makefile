@@ -1,9 +1,7 @@
-CC = clang
+CC = gcc
 CFLAGS = -Wall -luring -O2
 
-BUILD_DIR = bin/
-EXEC = $(BUILD_DIR)lndir
-
+EXEC = lndir
 SRC = src/main.c src/string_list.c src/lndir_uring.c
 
 all: $(EXEC)
@@ -11,7 +9,7 @@ all: $(EXEC)
 
 ## Single compilation unit
 
-$(EXEC): $(BUILD_DIR)
+$(EXEC):
 	 $(CC) $(SRC) $(CFLAGS) -o $@
 
 
@@ -25,9 +23,6 @@ $(EXEC): $(BUILD_DIR)
 # $(EXEC): $(OBJ)
 # 	$(CC) $(OBJ) $(CFLAGS) -o $@
 
-
-$(BUILD_DIR):
-	mkdir $(BUILD_DIR)
 
 clean:
 	rm -rf $(OBJ) $(EXEC) $(BUILD_DIR)
