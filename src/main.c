@@ -4,6 +4,12 @@
 
 #include "lndir.h"
 
+#define VERSION "0.0.1"
+
+void print_version() {
+    printf("%s\n", VERSION);
+}
+
 void print_help(const char* prog_name) {
     const char* help_string =
         "Usage: %s [OPTIONS] <source_directory> <target_directory>\n"
@@ -12,7 +18,8 @@ void print_help(const char* prog_name) {
         "within <target_directory>.\n"
         "\n"
         "Options:\n"
-        "  -h, --help        Show this help message and exit\n"
+        "  -h, --help        Print this help message\n"
+        "  -v, --version     Print the version\n"
         "\n"
         "Example:\n"
         "  %s /path/to/source /path/to/target\n"
@@ -23,6 +30,10 @@ void print_help(const char* prog_name) {
 int main(int argc, char* argv[]) {
     if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
         print_help(argv[0]);
+        exit(EXIT_SUCCESS);
+    }
+    if (argc == 2 && (strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0)) {
+        print_version();
         exit(EXIT_SUCCESS);
     }
     if (argc != 3) {
