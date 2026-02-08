@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+// #include <limits.h>
+#include <stdint.h>
 
 // #define DEBUG
 #include "string_list.h"
@@ -23,8 +25,12 @@
 #endif
 #endif
 
-#define next_power_of_2(x) (1 << (sizeof(x) - __builtin_clz(x - 1)))
+// #define next_power_of_2(x) (1 << (sizeof(x) - __builtin_clz(x - 1)))
 
+static inline int next_power_of_2(int x) {
+    int clz = __builtin_clz(x - 1);    
+    return 1 << clz;
+}
 
 StringListBlock *StringListBlock_new_blocksize(int blocksize) {
     assert(blocksize > 0);
@@ -50,19 +56,22 @@ StringListBlock* StringListBlock_add(StringListBlock *list, const char *string, 
 
     // Need + 2 so the iterator works as expected
     if (string_len + list->len + 2 >= list->cap) {
-        int new_blocksize = max(list->cap * 2, next_power_of_2(string_len * 2));
+        int string_len_next = next_power_of_2(string_len);
+
+        int new_blocksize = max(list->cap * 2, string_len_next);
         StringListBlock *new_list = StringListBlock_new_blocksize(new_blocksize);
         list->next = new_list;
         list = new_list;
     }
-    memcpy((char*)list + sizeof(StringListBlock) + list->len, string, string_len);
+    memcpy((char*)list + sizeof(StringListBlock) + list->len, string, string_len );
     list->len += string_len + 1;
     return list;
 }
 
 StringListBlock *StringListBlock_add_nullterm(StringListBlock *list, const char *string) {
-    int len = strlen(string);
-    return StringListBlock_add(list, string, len);
+    unsigned long int len = strlen(string);
+    assert(len < INT32_MAX);
+    return StringListBlock_add(list, string, (int) len);
 }
 
 StringList StringList_new() {
