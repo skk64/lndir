@@ -14,6 +14,7 @@ $(EXEC): $(SRC)
 
 
 ## Seperate compilation units + linking
+## A single CU compiles fast enough for now
 
 # OBJ = $(SRC:.c=.o)
 
