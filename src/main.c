@@ -1,18 +1,15 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-// #define DEBUG
 
 #include "lndir.h"
 
 void print_help(const char* prog_name) {
     const char* help_string =
         "Usage: %s [OPTIONS] <source_directory> <target_directory>\n"
-        "Recursively create hard links for all files in <source_directory> "
+        "Will duplicate the directory structure of <source_directory> in <target_directory>,\n"
+        "and create hard links for all files in <source_directory>"
         "within <target_directory>.\n"
-        "Will create duplicate directories in <target_directory>.\n"
         "\n"
         "Options:\n"
         "  -h, --help        Show this help message and exit\n"
