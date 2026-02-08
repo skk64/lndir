@@ -1,9 +1,15 @@
+/// To run the tests, run:
+/// `zig build test`
+///
 const std = @import("std");
 
+const c_source_files = [_][:0]const u8{
+    "src/lndir_uring.c",
+    "src/string_list.c",
+};
+const c_main_file = "src/main.c";
+
 pub fn build(b: *std.Build) void {
-    // options
-    // liburing doesn't compile with a musl target (as of 0.16)
-    // const target = b.standardTargetOptions(.{ .default_target = if (staticBinary) .{ .abi = .musl } else .{} });
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -13,16 +19,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     const WerrorIfDebug = if (optimize == .Debug) "-Werror" else "";
-    // c_exe_mod.addCSourceFile(.{ .file = b.path("src/lndir.c"), .flags = &.{WerrorIfDebug} });
     exe_mod.addCSourceFiles(.{
-        .files = &.{
-            "src/lndir_uring.c",
-            "src/string_list.c",
-            // "src/main.c",
-        },
+        .files = &c_source_files,
         .flags = &.{WerrorIfDebug},
     });
-    exe_mod.addCSourceFile(.{ .file = b.path("src/main.c") });
+    exe_mod.addCSourceFile(.{ .file = b.path(c_main_file) });
     exe_mod.link_libc = true;
     exe_mod.linkSystemLibrary("uring", .{ .preferred_link_mode = .dynamic });
 
@@ -42,34 +43,25 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     // test steps
-    const string_mod = translate_c_file(b, optimize, target, "src/string_list.h");
-    const lndir_mod = translate_c_file(b, optimize, target, "src/lndir.h");
-
     const test_mod = b.createModule(.{
         .root_source_file = b.path("src/tests.zig"),
         .target = target,
         .optimize = optimize,
     });
-    test_mod.addCSourceFiles(.{ .files = c_source_files });
-    test_mod.addImport("string_list", string_mod);
-    test_mod.addImport("lndir", lndir_mod);
+    test_mod.addCSourceFiles(.{ .files = &c_source_files });
     test_mod.link_libc = true;
     test_mod.linkSystemLibrary("uring", .{ .preferred_link_mode = .dynamic });
 
-    //
-    const exe_unit_tests = b.addTest(.{
-        .root_module = test_mod,
-    });
+    const string_mod = translate_c_file(b, optimize, target, "src/string_list.h");
+    const lndir_mod = translate_c_file(b, optimize, target, "src/lndir.h");
+    test_mod.addImport("string_list", string_mod);
+    test_mod.addImport("lndir", lndir_mod);
+
+    const exe_unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_exe_unit_tests.step);
 }
-
-const c_source_files = &.{
-    "src/lndir_uring.c",
-    "src/string_list.c",
-    // "src/main.c",
-};
 
 fn translate_c_file(
     b: *std.Build,
