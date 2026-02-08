@@ -26,3 +26,6 @@ $(EXEC): $(SRC)
 
 clean:
 	rm -rf $(OBJ) $(EXEC) $(BUILD_DIR)
+
+clean_zig:
+	rm -rf $(OBJ) $(EXEC) $(BUILD_DIR) .zig-cache/ zig-out/
