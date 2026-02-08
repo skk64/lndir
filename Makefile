@@ -9,7 +9,7 @@ all: $(EXEC)
 
 ## Single compilation unit
 
-$(EXEC):
+$(EXEC): $(SRC)
 	 $(CC) $(SRC) $(CFLAGS) -o $@
 
 
