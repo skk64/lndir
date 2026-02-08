@@ -37,5 +37,6 @@ int main(int argc, char* argv[]) {
     char* input = argv[1];
     char* output = argv[2];
 
-    hardlink_directory_structure(input, output);
+    int result = hardlink_directory_structure(input, output);
+    if (result != 0) printf("%s\n", strerror(result));
 }

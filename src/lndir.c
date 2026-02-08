@@ -62,14 +62,14 @@ LinkResults iouring_handle_results(struct io_uring* ring) {
 /// However, stderr is printed to.
 ///
 /// Returns 0 on success
-/// If io_uring fails, returns -errno
-/// if the directories are invalid, returns 1
+/// If io_uring fails, returns errno
 int hardlink_file_list_iouring_fd(StringListIter* file_list, int src_dir_fd, int dest_dir_fd) {
-    if (src_dir_fd < 0 || dest_dir_fd < 0) return 1;
+    assert(src_dir_fd > 0);
+    assert(dest_dir_fd > 0);
 
     struct io_uring ring;
     int result = io_uring_queue_init(MAX_SQE, &ring, 0);
-    if (result != 0) return result;
+    if (result != 0) return -result;
 
     int submission_count = 0;
     LinkResults counts = {};
@@ -156,24 +156,34 @@ int copy_directories_add_filenames(const char* fpath, const struct stat* sb, int
     return 0;
 }
 
-void hardlink_directory_structure(const char* src_dir, const char* dest_dir) {
+
+int hardlink_directory_structure(const char* src_dir, const char* dest_dir) {
+    int result;
     int source_directory_fd = open(src_dir, O_DIRECTORY);
+    if (source_directory_fd == -1) return errno; 
+
     // Create destination directory
     struct stat src_dir_stat;
-    fstat(source_directory_fd, &src_dir_stat);
-    mkdir(dest_dir, src_dir_stat.st_mode);
+    result = fstat(source_directory_fd, &src_dir_stat);
+    if (result == -1) return errno; 
+
 
     // need to prepare globals for nftw callback
     lndir_source_directory_len = strlen(src_dir);
+    result = mkdir(dest_dir, src_dir_stat.st_mode);
+    if (result == -1) return errno; 
     lndir_destination_directory_fd = open(dest_dir, O_DIRECTORY);
+    if (lndir_destination_directory_fd == -1) return errno; 
 
     nftw(src_dir, &copy_directories_add_filenames, 128, 0);
 
     StringListIter iter = StringList_iterate(&lndir_file_list);
-    hardlink_file_list_iouring_fd(&iter, source_directory_fd, lndir_destination_directory_fd);
+    result = hardlink_file_list_iouring_fd(&iter, source_directory_fd, lndir_destination_directory_fd);
+    if (result != 0) return result; 
 
     close(source_directory_fd);
     close(lndir_destination_directory_fd);
 
     StringList_free(&lndir_file_list);
+    return 0;
 }
