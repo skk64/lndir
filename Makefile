@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wall -luring -O2
 
 EXEC = lndir
-SRC = src/main.c src/string_list.c src/lndir_uring.c
+SRC = src/main.c src/string_list.c src/lndir.c
 
 all: $(EXEC)
 

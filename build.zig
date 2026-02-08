@@ -4,7 +4,7 @@
 const std = @import("std");
 
 const c_source_files = [_][:0]const u8{
-    "src/lndir_uring.c",
+    "src/lndir.c",
     "src/string_list.c",
 };
 const c_main_file = "src/main.c";
