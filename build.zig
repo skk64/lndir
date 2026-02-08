@@ -123,5 +123,3 @@ fn translate_c_file(
     translate_c_mod.link_libc = true;
     return translate_c_mod;
 }
-
-fn read_zon(T: type) T {}
