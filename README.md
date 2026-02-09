@@ -13,11 +13,13 @@ lndir is linux-only, as it uses the ui_uring api. Also, hardlinking files doesn'
 
 ### Safe file reorganising
 
-Files can be safely reorganised and renamed without risk of accidental deletion.
+Files can be safely reorganised and renamed without any risk of data loss. Just duplicate the directory, e.g. `lndir Documents Documented_backup`, then make changes in Documents. If anything is accidentally deleted/renamed, the original files will all remain in the backup directory.
+
+Note that this doesn't backup the file contents, only the files, filenames, and directory structure. Any file edited in one directory will have the changes be reflected in the other. This property is what makes the next example possible.
 
 ### Dotfile management
 
-This acts as a more basic/general version of GNU stow. Create a directory with dotfiles in it, as they would be in your home directory, then run lndir to automatically link all of them to their correct locations.
+This acts as a more general version of GNU stow. Create a directory with dotfiles in it that matches the structure of your home directory. Then run `lndir dotfiles/ /home/<your username> to automatically link all of them to their correct locations.
 
 ## Compilation
 

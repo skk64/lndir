@@ -4,7 +4,7 @@ CC = cc
 CFLAGS = -Wall -luring -O2 -DVERSION=\"$(VERSION)\"
 
 EXEC = lndir
-SRC = src/main.c src/string_list.c src/lndir.c
+SRC = src/main.c src/string_list.c src/lndir.c src/dir_walker.c
 VERSION_FILE = build.zig.zon
 MAKEFILE = Makefile
 
