@@ -12,6 +12,12 @@ static bool is_valid_path(const char* path) {
 }
 
 
+/// Appends path_to_append to the end of source_path.
+/// Writes a '/' delimiter if it doesn't already exist.
+// 
+/// If source_path_len is 0, it just copies the path; a leading '/' is not included.
+/// Include a leading '/' in path_to_append to write an absolute path
+/// 
 /// Returns the new length, or 0 if it fails because the MAX_PATH_LEN is reached
 unsigned int append_path(char* source_path, unsigned int source_path_len, const char* path_to_append) {
     int extra_len = strlen(path_to_append);
