@@ -162,16 +162,6 @@ simple_ftw_sig copy_directories_add_filenames(const struct dirent* dir_entry, co
 }
 
 
-/// Returns:
-//   0 on success
-//   1 if source directory couldn't be opened
-//   2 if source directory couldn't be stat-ed
-//   3 if destination directory couldn't be created
-//   4 if destination directory couldn't be opened
-//   5 if io_uring fails
-//
-//   For any non-zero return, errno is set to the reason for the failure
-// 
 enum lndir_result hardlink_directory_structure(const char* src_dir, const char* dest_dir) {
     int result = 0;
     int source_directory_fd = open(src_dir, O_DIRECTORY);

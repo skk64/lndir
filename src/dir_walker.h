@@ -1,6 +1,6 @@
 /*
  * I made this simple file tree walker because the libc nftw doesn't have any way to reference userdata for the callback.
- * It has hardcoded limits on the path length and max directory depth.
+ * This implementation has hardcoded limits on the path length and max directory depth.
 */
 
 #include <dirent.h>
