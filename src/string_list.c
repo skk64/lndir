@@ -52,7 +52,7 @@ StringListBlock *StringListBlock_new() {
 StringListBlock* StringListBlock_add(StringListBlock *list, const char *string, int string_len) {
     if (list == NULL) return NULL;
 
-    debug_printf("List: add string: %s\n", string);
+    debug_printf("List: add string: '%s'\n", string);
 
     // Need + 2 so the iterator works as expected
     if (string_len + list->len + 2 >= list->cap) {
