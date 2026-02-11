@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "string_list.h"
+#include "lndir.h"
 
 // Size of the Submission Queue
 #define MAX_SQE 128
@@ -157,33 +157,52 @@ int copy_directories_add_filenames(const char* fpath, const struct stat* sb, int
 }
 
 
-int hardlink_directory_structure(const char* src_dir, const char* dest_dir) {
-    int result;
+/// Returns:
+//   0 on success
+//   1 if source directory couldn't be opened
+//   2 if source directory couldn't be stat-ed
+//   3 if destination directory couldn't be created
+//   4 if destination directory couldn't be opened
+//   5 if io_uring fails
+//
+//   For any non-zero return, errno is set to the reason for the failure
+// 
+enum lndir_result hardlink_directory_structure(const char* src_dir, const char* dest_dir) {
+    int result = 0;
     int source_directory_fd = open(src_dir, O_DIRECTORY);
-    if (source_directory_fd == -1) return errno; 
+    if (source_directory_fd == -1) goto cleanup_1;
 
     // Create destination directory
     struct stat src_dir_stat;
     result = fstat(source_directory_fd, &src_dir_stat);
-    if (result == -1) return errno; 
-
+    if (result == -1) goto cleanup_2;
 
     // need to prepare globals for nftw callback
     lndir_source_directory_len = strlen(src_dir);
     result = mkdir(dest_dir, src_dir_stat.st_mode);
-    if (result == -1) return errno; 
+    if (result == -1) goto cleanup_3; 
     lndir_destination_directory_fd = open(dest_dir, O_DIRECTORY);
-    if (lndir_destination_directory_fd == -1) return errno; 
+    if (lndir_destination_directory_fd == -1) goto cleanup_4;
 
     nftw(src_dir, &copy_directories_add_filenames, 128, 0);
 
     StringListIter iter = StringList_iterate(&lndir_file_list);
-    result = hardlink_file_list_iouring_fd(&iter, source_directory_fd, lndir_destination_directory_fd);
-    if (result != 0) return result; 
+    errno = hardlink_file_list_iouring_fd(&iter, source_directory_fd, lndir_destination_directory_fd);
+    if (errno != 0) goto cleanup_5; 
 
-    close(source_directory_fd);
-    close(lndir_destination_directory_fd);
-
+    result = -5;
+cleanup_5:
+    result += 1;
     StringList_free(&lndir_file_list);
-    return 0;
+    close(lndir_destination_directory_fd);
+cleanup_4:
+    result += 1;
+cleanup_3:
+    result += 1;
+cleanup_2:
+    result += 1;
+    close(source_directory_fd);
+cleanup_1:
+    result += 1;
+    return result;
 }

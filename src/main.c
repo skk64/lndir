@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #include "lndir.h"
 
@@ -47,6 +48,24 @@ int main(int argc, char* argv[]) {
     char* input = argv[1];
     char* output = argv[2];
 
-    int result = hardlink_directory_structure(input, output);
-    if (result != 0) printf("%s\n", strerror(result));
+    enum lndir_result result = hardlink_directory_structure(input, output);
+    switch (result) {
+    case (LNDIR_SUCCESS):
+        break;
+    case (LNDIR_SRC_OPEN):
+        printf("Source directory (%s) couldn't be opened:  %s \n", input, strerror(errno));
+        break;
+    case (LNDIR_SRC_STAT):
+        printf("Source directory couldn't be stat-ed:  %s \n", strerror(errno));
+        break;
+    case (LNDIR_DEST_CREATE):
+        printf("Destination directory couldn't be created:  %s \n", strerror(errno));
+        break;
+    case (LNDIR_DEST_OPEN):
+        printf("Destination directory couldn't be opened:  %s \n", strerror(errno));
+        break;
+    case (LNDIR_IO_URING):
+        printf("io_uring couldn't be initialised:  %s \n", strerror(errno));
+        break;
+    }
 }
