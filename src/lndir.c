@@ -48,11 +48,9 @@ int hardlink_file_list_iouring_fd(StringListIter* file_list, int src_dir_fd, int
     assert(src_dir_fd > 0);
     assert(dest_dir_fd > 0);
 
-    debug_printf("1\n");
     struct io_uring ring;
     int result = io_uring_queue_init(MAX_SQE, &ring, 0);
     if (result != 0) return -result;
-    debug_printf("2\n");
 
     int submission_count = 0;
     int total_handled = 0;
@@ -97,7 +95,12 @@ int hardlink_file_list_iouring_fd(StringListIter* file_list, int src_dir_fd, int
 /// if the directories are invalid, returns 1
 int hardlink_file_list_iouring(StringListIter* file_list, const char* src_dir, const char* dest_dir, lndir_callback_t cb, void* userdata) {
     int src_fd = open(src_dir, O_DIRECTORY);
+    if (src_fd == -1) return 1;
     int dest_fd = open(dest_dir, O_DIRECTORY);
+    if (dest_fd == -1) {
+        close(src_fd);
+        return 1;
+    }
     int result = hardlink_file_list_iouring_fd(file_list, src_fd, dest_fd, cb, userdata);
     close(src_fd);
     close(dest_fd);
@@ -123,15 +126,15 @@ simple_ftw_sig copy_directories_add_filenames(const struct dirent* dir_entry, co
     while (file_relative[0] == '/') file_relative += 1;
 
     struct stat st;
+    int result;
 
     switch (dir_entry->d_type) {
         case DT_DIR:
-            stat(path, &st);
-            debug_printf("ftw_cb  dir: '%s'\n", path);
+            result = stat(path, &st);
+            if (result == -1) break;
             mkdirat(ctx->destination_directory_fd, file_relative, st.st_mode);
             break;
         case DT_REG:
-            debug_printf("ftw_cb  file: '%s'\n", path);
             StringList_add_nullterm(&ctx->file_list, file_relative);
             break;
     }
