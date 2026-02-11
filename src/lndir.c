@@ -134,11 +134,11 @@ simple_ftw_sig copy_directories_add_filenames(const struct dirent* dir_entry, co
     switch (dir_entry->d_type) {
         case DT_DIR:
             stat(path, &st);
-            debug_printf("dir: '%s'\n", path);
+            debug_printf("ftw_cb  dir: '%s'\n", path);
             mkdirat(ctx->destination_directory_fd, file_relative, st.st_mode);
             break;
         case DT_REG:
-            debug_printf("file: '%s'\n", path);
+            debug_printf("ftw_cb  file: '%s'\n", path);
             StringList_add_nullterm(&ctx->file_list, file_relative);
             break;
     }

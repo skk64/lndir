@@ -4,9 +4,28 @@ const testing = std.testing;
 const sl = @import("string_list");
 const lndir = @import("lndir");
 
-extern fn hardlink_file_list_iouring(file_list: *sl.StringListIter, src_dir: [*:0]const u8, dest_dir: [*:0]const u8) c_int;
+extern fn append_path(source_path: [*c]u8, source_path_len: c_uint, path_to_append: [*c]const u8) c_uint;
+
+extern fn hardlink_file_list_iouring(file_list: *sl.StringListIter, src_dir: [*:0]const u8, dest_dir: [*:0]const u8, cb: lndir.lndir_callback_t, userdata: ?*anyopaque) c_int;
+
+test "append path" {
+    var buf: [4096]u8 = undefined;
+    try test_append_path(&buf, "start", "stuff", "start/stuff");
+    try test_append_path(&buf, "start/", "stuff", "start/stuff");
+    try test_append_path(&buf, "start/stuff", "otherstuff", "start/stuff/otherstuff");
+}
+
+fn test_append_path(buf: []u8, start: []const u8, to_append: []const u8, expected: []const u8) !void {
+    @memset(buf, 0);
+    const new_len = append_path(buf.ptr, 0, start.ptr);
+    const append_len = append_path(buf.ptr, new_len, to_append.ptr);
+    try testing.expectEqual(expected.len, append_len);
+    const bufptr: [*:0]u8 = @ptrCast(buf.ptr);
+    try testing.expectEqualStrings(expected, std.mem.span(bufptr));
+}
 
 test "lndir link" {
+    // if (true) return;
     const io = testing.io;
     var list: sl.StringList = .{ .first = null, .last = null };
     var iter: sl.StringListIter = sl.StringList_iterate(&list);
@@ -36,7 +55,7 @@ test "lndir link" {
         const file = try std.Io.Dir.createFile(cwd, io, source_dir ++ "/" ++ f, .{});
         file.close(io);
     }
-    const result = hardlink_file_list_iouring(@ptrCast(&iter), source_dir, destination_dir);
+    const result = hardlink_file_list_iouring(@ptrCast(&iter), source_dir, destination_dir, null, null);
     try testing.expectEqual(0, result);
 
     inline for (files) |f| {
