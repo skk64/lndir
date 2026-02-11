@@ -51,6 +51,7 @@ static simple_ftw_sig recurse_simple_ftw(char* path, unsigned int path_len, int 
         if (cb) {
             switch (cb(ent, path, new_len, userdata)) {
                 case S_FTW_STOP_ITERATION:
+                    closedir(dir);
                     return S_FTW_STOP_ITERATION;
                 case S_FTW_SKIP_DIRECTORY:
                     continue;
@@ -60,9 +61,14 @@ static simple_ftw_sig recurse_simple_ftw(char* path, unsigned int path_len, int 
         } 
 
         if (ent->d_type == DT_DIR) {
-            recurse_simple_ftw(path, new_len, depth + 1, cb, userdata);
+            simple_ftw_sig result = recurse_simple_ftw(path, new_len, depth + 1, cb, userdata);
+            if (result == S_FTW_STOP_ITERATION) {
+                closedir(dir);
+                return S_FTW_STOP_ITERATION;
+            }
         }
     }
+    closedir(dir);
     return S_FTW_CONTINUE;
 }
 
