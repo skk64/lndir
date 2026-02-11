@@ -35,6 +35,6 @@ typedef int (*lndir_callback_t)(char* path, int result, void* userdata);
  *   For any non-zero return, errno is set to the reason for the failure
  */
 enum lndir_result hardlink_directory_structure(
-    const char* src_dir, const char* dest_dir, int* successes, int* total, lndir_callback_t cb, void* userdata);
+    const char* src_dir, const char* dest_dir, lndir_callback_t cb, void* userdata);
 
 #endif

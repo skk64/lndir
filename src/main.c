@@ -38,7 +38,17 @@ void print_help(const char* prog_name) {
     printf(help_string, prog_name, prog_name, prog_name);
 }
 
+struct LinkResults {
+    int successes;
+    int total_handled;
+};
+typedef struct LinkResults LinkResults;
+
 int lndir_cb(char* path, int result, void* userdata) {
+    LinkResults* results = userdata;
+    results->total_handled += 1;
+    if (result == 0) results->successes += 1;
+
     char* errmsg = strerror(result);
     if (result != 0 && errmsg != NULL) fprintf(stderr, "%s: %s\n", errmsg, path);
     return 0;
@@ -62,10 +72,9 @@ int main(int argc, char* argv[]) {
     char* input = argv[1];
     char* output = argv[2];
 
-    int successes = 0;
-    int total = 0;
-    enum lndir_result result = hardlink_directory_structure(input, output, &successes, &total, lndir_cb, NULL);
-    printf("Total linked files:  %d / %d\n", successes, total);
+    LinkResults results = {0};
+    enum lndir_result result = hardlink_directory_structure(input, output, lndir_cb, &results);
+    printf("Total linked files:  %d / %d\n", results.successes, results.total_handled);
 
     switch (result) {
     case (LNDIR_SUCCESS):

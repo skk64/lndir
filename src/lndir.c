@@ -25,34 +25,24 @@
 #endif
 #endif
 
-struct LinkResults {
-    int successes;
-    int total_handled;
-};
-typedef struct LinkResults LinkResults;
-
-
 /// For each result in the completion queue, if it was an error, print to stderr
 ///
 /// Returns the number of results handled
-LinkResults iouring_handle_results(struct io_uring* ring, lndir_callback_t cb, void* userdata) {
-    LinkResults results = {};
+int iouring_handle_results(struct io_uring* ring, lndir_callback_t cb, void* userdata) {
     debug_printf("iouring_handle_results:\n");
     struct io_uring_cqe* cqe;
     int count = 0;
     int result;
     while ((result = io_uring_peek_cqe(ring, &cqe)) == 0) {
-        count += 1;
 
         char* path = io_uring_cqe_get_data(cqe);
         int cb_result = -cqe->res;
         if (cb != NULL) cb(path, cb_result, userdata);
+        count += 1;
 
-        if (cqe->res >= 0) results.successes += 1;
         io_uring_cqe_seen(ring, cqe);
     }
-    results.total_handled = count;
-    return results;
+    return count;
 }
 
 /// For each file in the file list, hard links that file from the source directory to destination directory
@@ -61,7 +51,7 @@ LinkResults iouring_handle_results(struct io_uring* ring, lndir_callback_t cb, v
 ///
 /// Returns 0 on success
 /// If io_uring fails, returns errno
-int hardlink_file_list_iouring_fd(StringListIter* file_list, int src_dir_fd, int dest_dir_fd, LinkResults* results, lndir_callback_t cb, void* userdata) {
+int hardlink_file_list_iouring_fd(StringListIter* file_list, int src_dir_fd, int dest_dir_fd, lndir_callback_t cb, void* userdata) {
     assert(src_dir_fd > 0);
     assert(dest_dir_fd > 0);
 
@@ -70,16 +60,14 @@ int hardlink_file_list_iouring_fd(StringListIter* file_list, int src_dir_fd, int
     if (result != 0) return -result;
 
     int submission_count = 0;
-    LinkResults counts = {};
+    int total_handled = 0;
 
     char* file_path;
     while ((file_path = StringListIter_next(file_list)) != NULL) {
         struct io_uring_sqe* sqe = io_uring_get_sqe(&ring);
         // get_sqe returns NULL when the queue is full
         while (sqe == NULL) {
-            LinkResults results_handled = iouring_handle_results(&ring, cb, userdata);
-            counts.total_handled += results_handled.total_handled;
-            counts.successes += results_handled.successes;
+            total_handled += iouring_handle_results(&ring, cb, userdata);
             sqe = io_uring_get_sqe(&ring);
         }
         io_uring_prep_linkat(sqe, src_dir_fd, file_path, dest_dir_fd, file_path, 0);
@@ -93,18 +81,15 @@ int hardlink_file_list_iouring_fd(StringListIter* file_list, int src_dir_fd, int
 
     io_uring_submit(&ring);
 
-    while (counts.total_handled < submission_count) {
+    while (total_handled < submission_count) {
         debug_printf("handled/submitted:   %d/%d\n", counts.total_handled, submission_count);
         // block until ready
         struct io_uring_cqe* cqe;
         io_uring_wait_cqe(&ring, &cqe);
 
-        LinkResults results_handled = iouring_handle_results(&ring, cb, userdata);
-        counts.total_handled += results_handled.total_handled;
-        counts.successes += results_handled.successes;
+        total_handled += iouring_handle_results(&ring, cb, userdata);
     }
     io_uring_queue_exit(&ring);
-    *results = counts;
     return 0;
 }
 
@@ -115,10 +100,10 @@ int hardlink_file_list_iouring_fd(StringListIter* file_list, int src_dir_fd, int
 /// Returns 0 on success
 /// If io_uring fails, returns -errno
 /// if the directories are invalid, returns 1
-int hardlink_file_list_iouring(StringListIter* file_list, const char* src_dir, const char* dest_dir, LinkResults* results, lndir_callback_t cb, void* userdata) {
+int hardlink_file_list_iouring(StringListIter* file_list, const char* src_dir, const char* dest_dir, lndir_callback_t cb, void* userdata) {
     int src_fd = open(src_dir, O_DIRECTORY);
     int dest_fd = open(dest_dir, O_DIRECTORY);
-    int result = hardlink_file_list_iouring_fd(file_list, src_fd, dest_fd, results, cb, userdata);
+    int result = hardlink_file_list_iouring_fd(file_list, src_fd, dest_fd, cb, userdata);
     close(src_fd);
     close(dest_fd);
     return result;
@@ -160,7 +145,7 @@ simple_ftw_sig copy_directories_add_filenames(const struct dirent* dir_entry, co
 }
 
 
-enum lndir_result hardlink_directory_structure(const char* src_dir, const char* dest_dir, int* successes, int* total,  lndir_callback_t cb, void* userdata) {
+enum lndir_result hardlink_directory_structure(const char* src_dir, const char* dest_dir, lndir_callback_t cb, void* userdata) {
     int result = 0;
     int source_directory_fd = open(src_dir, O_DIRECTORY);
     if (source_directory_fd == -1) goto cleanup_1;
@@ -179,11 +164,8 @@ enum lndir_result hardlink_directory_structure(const char* src_dir, const char* 
 
     simple_ftw(src_dir, &copy_directories_add_filenames, &ctx);
 
-    LinkResults results = {0};
     StringListIter iter = StringList_iterate(&ctx.file_list);
-    errno = hardlink_file_list_iouring_fd(&iter, source_directory_fd, ctx.destination_directory_fd, &results, cb, userdata);
-    if (successes != NULL) *successes = results.successes;
-    if (total != NULL) *total = results.total_handled;
+    errno = hardlink_file_list_iouring_fd(&iter, source_directory_fd, ctx.destination_directory_fd, cb, userdata);
     if (errno != 0) goto cleanup_5; 
 
     result = -5;
