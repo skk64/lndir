@@ -10,20 +10,13 @@
 
 #include "lndir.h"
 #include "dir_walker.h"
+#include "debug.h"
 
 // Size of the Submission Queue
 #define MAX_SQE 128
 // Number of submissions to queue before submitting
 // Must be smaller than MAX_SQE
 #define SQE_SUBMISSION_SIZE 64
-
-#ifndef debug_printf
-#ifdef DEBUG
-#define debug_printf(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__);
-#else
-#define debug_printf(fmt, ...)
-#endif
-#endif
 
 /// For each result in the completion queue, if it was an error, print to stderr
 ///

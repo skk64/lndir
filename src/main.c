@@ -4,18 +4,12 @@
 #include <errno.h>
 
 #include "lndir.h"
+#include "debug.h"
 
 #ifndef VERSION
 #define VERSION "unknown"
 #endif
 
-#ifndef debug_printf
-#ifdef DEBUG
-#define debug_printf(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__);
-#else
-#define debug_printf(fmt, ...)
-#endif
-#endif
 
 void print_version() {
     printf("%s\n", VERSION);
