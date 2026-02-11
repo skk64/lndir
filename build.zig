@@ -15,6 +15,7 @@ const c_main_file = "src/main.c";
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const debug = b.option(bool, "debug", "enable debug printing") orelse (optimize == .Debug);
 
     const version = read_version(b.allocator) catch @panic("Error reading version from build.zig.zon");
 
@@ -32,6 +33,7 @@ pub fn build(b: *std.Build) void {
     exe_mod.link_libc = true;
     exe_mod.linkSystemLibrary("uring", .{ .preferred_link_mode = .dynamic });
     exe_mod.addCMacro("VERSION", version);
+    if (debug) exe_mod.addCMacro("DEBUG", "");
 
     const c_exe = b.addExecutable(.{
         .name = "lndir",

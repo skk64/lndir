@@ -9,6 +9,14 @@
 #define VERSION "unknown"
 #endif
 
+#ifndef debug_printf
+#ifdef DEBUG
+#define debug_printf(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__);
+#else
+#define debug_printf(fmt, ...)
+#endif
+#endif
+
 void print_version() {
     printf("%s\n", VERSION);
 }
@@ -51,15 +59,16 @@ int main(int argc, char* argv[]) {
     enum lndir_result result = hardlink_directory_structure(input, output);
     switch (result) {
     case (LNDIR_SUCCESS):
+        debug_printf("Success\n");
         break;
     case (LNDIR_SRC_OPEN):
         printf("Source directory (%s) couldn't be opened:  %s \n", input, strerror(errno));
         break;
     case (LNDIR_SRC_STAT):
-        printf("Source directory couldn't be stat-ed:  %s \n", strerror(errno));
+        printf("Source directory couldn't be read:  %s \n", strerror(errno));
         break;
     case (LNDIR_DEST_CREATE):
-        printf("Destination directory couldn't be created:  %s \n", strerror(errno));
+        printf("Destination directory couldn't be created: %s \n", strerror(errno));
         break;
     case (LNDIR_DEST_OPEN):
         printf("Destination directory couldn't be opened:  %s \n", strerror(errno));
@@ -67,5 +76,9 @@ int main(int argc, char* argv[]) {
     case (LNDIR_IO_URING):
         printf("io_uring couldn't be initialised:  %s \n", strerror(errno));
         break;
+    default:
+        debug_printf("Unexpected result (%d), errno %d: %s\n", result, errno, strerror(errno));
+        break;
     }
+    
 }

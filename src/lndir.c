@@ -1,8 +1,6 @@
 #define _XOPEN_SOURCE 500
 #define _GNU_SOURCE
 
-// #define DEBUG
-
 #include <assert.h>
 #include <ftw.h>
 #include <liburing.h>
@@ -179,8 +177,8 @@ enum lndir_result hardlink_directory_structure(const char* src_dir, const char* 
 
     // need to prepare globals for nftw callback
     lndir_source_directory_len = strlen(src_dir);
-    result = mkdir(dest_dir, src_dir_stat.st_mode);
-    if (result == -1) goto cleanup_3; 
+    int dir_result = mkdir(dest_dir, src_dir_stat.st_mode);
+    if (dir_result == -1 && errno != EEXIST)  goto cleanup_3; 
     lndir_destination_directory_fd = open(dest_dir, O_DIRECTORY);
     if (lndir_destination_directory_fd == -1) goto cleanup_4;
 

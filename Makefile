@@ -8,8 +8,6 @@ SRC = src/main.c src/string_list.c src/lndir.c
 VERSION_FILE = build.zig.zon
 MAKEFILE = Makefile
 
-all: $(EXEC)
-
 ## Single compilation unit
 
 $(EXEC): $(SRC) $(VERSION_FILE) $(MAKEFILE)
