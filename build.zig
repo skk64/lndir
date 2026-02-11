@@ -9,6 +9,7 @@ const std = @import("std");
 const c_source_files = [_][:0]const u8{
     "src/lndir.c",
     "src/string_list.c",
+    "src/dir_walker.c",
 };
 const c_main_file = "src/main.c";
 

@@ -6,8 +6,10 @@
 #include <liburing.h>
 #include <stdio.h>
 #include <string.h>
+#include <dirent.h>
 
 #include "lndir.h"
+#include "dir_walker.h"
 
 // Size of the Submission Queue
 #define MAX_SQE 128
@@ -124,47 +126,42 @@ int hardlink_file_list_iouring(StringListIter* file_list, const char* src_dir, c
     return result;
 }
 
-/// These are needed for the nftw callback
-// char* source_directory;
-// char* destination_directory;
-int lndir_source_directory_len = -1;
-int lndir_destination_directory_fd = -1;
-struct StringList lndir_file_list = {0};
+struct WalkerContext {
+    struct StringList file_list;
+    int source_directory_len;
+    int destination_directory_fd;
+};
+typedef struct WalkerContext WalkerContext;
 
 /// nftw callback
 /// For each directory in source, it creates a matching directory at the destination
 /// For each file in source, it adds the relative path to file_list
-int copy_directories_add_filenames(const char* fpath, const struct stat* sb, int typeflag, struct FTW* ftwbuf) {
-    assert(lndir_source_directory_len > 0);
-    assert(lndir_destination_directory_fd > 0);
-    const char* file_relative = fpath + lndir_source_directory_len;
+simple_ftw_sig copy_directories_add_filenames(const struct dirent* dir_entry, const char* path, unsigned int path_len, void* userdata) {
+    WalkerContext* ctx = (WalkerContext*)userdata;
+
+    assert(ctx->source_directory_len > 0);
+    assert(ctx->destination_directory_fd > 0);
+    const char* file_relative = path + ctx->source_directory_len;
     while (file_relative[0] == '/') file_relative += 1;
 
-    switch (sb->st_mode & S_IFMT) {
-        case S_IFREG:
-        case S_IFLNK:
-            debug_printf("file: %s\n", fpath);
-            StringList_add_nullterm(&lndir_file_list, file_relative);
+    struct stat st;
+
+    switch (dir_entry->d_type) {
+        case DT_DIR:
+            stat(path, &st);
+            debug_printf("dir: %s\n", path);
+            mkdirat(ctx->destination_directory_fd, file_relative, st.st_mode);
             break;
-        case S_IFDIR:
-            debug_printf("dir: %s\n", fpath);
-            mkdirat(lndir_destination_directory_fd, file_relative, sb->st_mode);
+        case DT_REG:
+            debug_printf("file: %s\n", path);
+            StringList_add_nullterm(&ctx->file_list, file_relative);
             break;
     }
-    return 0;
+           
+    return S_FTW_CONTINUE;
 }
 
 
-/// Returns:
-//   0 on success
-//   1 if source directory couldn't be opened
-//   2 if source directory couldn't be stat-ed
-//   3 if destination directory couldn't be created
-//   4 if destination directory couldn't be opened
-//   5 if io_uring fails
-//
-//   For any non-zero return, errno is set to the reason for the failure
-// 
 enum lndir_result hardlink_directory_structure(const char* src_dir, const char* dest_dir) {
     int result = 0;
     int source_directory_fd = open(src_dir, O_DIRECTORY);
@@ -174,25 +171,25 @@ enum lndir_result hardlink_directory_structure(const char* src_dir, const char* 
     struct stat src_dir_stat;
     result = fstat(source_directory_fd, &src_dir_stat);
     if (result == -1) goto cleanup_2;
-
-    // need to prepare globals for nftw callback
-    lndir_source_directory_len = strlen(src_dir);
     int dir_result = mkdir(dest_dir, src_dir_stat.st_mode);
     if (dir_result == -1 && errno != EEXIST)  goto cleanup_3; 
-    lndir_destination_directory_fd = open(dest_dir, O_DIRECTORY);
-    if (lndir_destination_directory_fd == -1) goto cleanup_4;
 
-    nftw(src_dir, &copy_directories_add_filenames, 128, 0);
+    WalkerContext ctx = {0};
+    ctx.source_directory_len = strlen(src_dir);
+    ctx.destination_directory_fd = open(dest_dir, O_DIRECTORY);
+    if (ctx.destination_directory_fd == -1) goto cleanup_4;
 
-    StringListIter iter = StringList_iterate(&lndir_file_list);
-    errno = hardlink_file_list_iouring_fd(&iter, source_directory_fd, lndir_destination_directory_fd);
+    simple_ftw(src_dir, &copy_directories_add_filenames, &ctx);
+
+    StringListIter iter = StringList_iterate(&ctx.file_list);
+    errno = hardlink_file_list_iouring_fd(&iter, source_directory_fd, ctx.destination_directory_fd);
     if (errno != 0) goto cleanup_5; 
 
     result = -5;
 cleanup_5:
     result += 1;
-    StringList_free(&lndir_file_list);
-    close(lndir_destination_directory_fd);
+    StringList_free(&ctx.file_list);
+    close(ctx.destination_directory_fd);
 cleanup_4:
     result += 1;
 cleanup_3:
