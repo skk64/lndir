@@ -38,6 +38,12 @@ void print_help(const char* prog_name) {
     printf(help_string, prog_name, prog_name, prog_name);
 }
 
+int lndir_cb(char* path, int result, void* userdata) {
+    char* errmsg = strerror(result);
+    if (result != 0 && errmsg != NULL) fprintf(stderr, "%s: %s\n", errmsg, path);
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
         print_help(argv[0]);
@@ -56,7 +62,11 @@ int main(int argc, char* argv[]) {
     char* input = argv[1];
     char* output = argv[2];
 
-    enum lndir_result result = hardlink_directory_structure(input, output);
+    int successes = 0;
+    int total = 0;
+    enum lndir_result result = hardlink_directory_structure(input, output, &successes, &total, lndir_cb, NULL);
+    printf("Total linked files:  %d / %d\n", successes, total);
+
     switch (result) {
     case (LNDIR_SUCCESS):
         debug_printf("Success\n");
