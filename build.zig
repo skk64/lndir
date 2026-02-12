@@ -20,6 +20,12 @@ pub fn build(b: *std.Build) void {
 
     const version = read_version(b.allocator) catch @panic("Error reading version from build.zig.zon");
 
+    const test_filters: []const []const u8 = b.option(
+        []const []const u8,
+        "test-filter",
+        "Skip tests that do not match any of the specified filters",
+    ) orelse &.{};
+
     // c exe
     const exe_mod = b.createModule(.{
         .target = target,
@@ -66,7 +72,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addImport("string_list", string_mod);
     test_mod.addImport("lndir", lndir_mod);
 
-    const exe_unit_tests = b.addTest(.{ .root_module = test_mod });
+    const exe_unit_tests = b.addTest(.{ .root_module = test_mod, .filters = test_filters });
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_exe_unit_tests.step);
